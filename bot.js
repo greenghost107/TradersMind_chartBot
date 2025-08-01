@@ -332,19 +332,26 @@ client.on('messageCreate', async (message) => {
     if (tickers.length > 0) {
         console.log(`📊 Detected: ${tickers.join(', ')}`);
         
-        // Create individual stock buttons for each detected ticker
-        const stockButtons = tickers.slice(0, 5).map(ticker => 
-            new ButtonBuilder()
-                .setCustomId(`stock_${ticker}`)
-                .setLabel(`📊 ${ticker}`)
-                .setStyle(ButtonStyle.Secondary)
-        );
+        // Create multiple action rows to handle all tickers (max 25 tickers, 5 per row)
+        const actionRows = [];
+        const maxTickers = Math.min(tickers.length, 25); // Discord limit: max 5 rows * 5 buttons = 25
         
-        const actionRow = new ActionRowBuilder().addComponents(stockButtons);
+        for (let i = 0; i < maxTickers; i += 5) {
+            const rowTickers = tickers.slice(i, i + 5);
+            const stockButtons = rowTickers.map(ticker => 
+                new ButtonBuilder()
+                    .setCustomId(`stock_${ticker}`)
+                    .setLabel(`📊 ${ticker}`)
+                    .setStyle(ButtonStyle.Secondary)
+            );
+            
+            const actionRow = new ActionRowBuilder().addComponents(stockButtons);
+            actionRows.push(actionRow);
+        }
         
         try {
             await message.reply({
-                components: [actionRow]
+                components: actionRows
             });
         } catch (error) {
             // Ignore reply errors
