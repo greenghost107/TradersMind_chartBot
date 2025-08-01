@@ -146,6 +146,67 @@ tradersmind_discord/
 ```bash
 npm start      # Production start
 npm run dev    # Development with nodemon
+npm test       # Run tests
+```
+
+## Testing
+
+### Running Tests
+The project includes comprehensive tests for the ticker detection functionality using Playwright:
+
+```bash
+# Install test dependencies (if not already installed)
+npm install
+
+# Run all tests
+npm test
+
+# Run tests with detailed output
+npx playwright test --reporter=list
+
+# Run tests in headed mode (with browser)
+npx playwright test --headed
+```
+
+### Test Coverage
+The test suite validates:
+
+**Required Test Cases:**
+- ✅ `"i bought AGX and CLS"` → Detects `["AGX", "CLS"]`
+- ✅ `"i think of buying OKLO"` → Detects `["OKLO"]`
+- ✅ `"bad day for trading"` → Returns `[]` (no tickers)
+
+**Additional Test Cases:**
+- Multiple ticker formats (comma-separated, space-separated)
+- Mixed content with Hebrew text
+- Common word filtering (excludes "THE", "AND", "GOOD", etc.)
+- Dollar sign prefixes (`$AAPL`)
+- Edge cases (empty strings, punctuation only)
+- Performance tests with large messages
+- Duplicate removal
+- Ticker length validation (1-5 characters)
+
+### Test Files Structure
+```
+tests/
+└── ticker-detection.spec.js    # Main test suite
+utils/
+└── ticker-detector.js          # Extracted testable function
+playwright.config.js            # Test configuration
+```
+
+### Example Test Output
+```
+Running 15 tests using 1 worker
+
+✓ should detect AGX and CLS from "i bought AGX and CLS"
+✓ should detect OKLO from "i think of buying OKLO"  
+✓ should return empty array for "bad day for trading"
+✓ should handle comma-separated tickers
+✓ should filter out common words
+...
+
+15 passed (2.3s)
 ```
 
 ## Troubleshooting
