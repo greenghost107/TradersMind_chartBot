@@ -20,9 +20,16 @@ module.exports = defineConfig({
   projects: [
     {
       name: 'unit-tests',
-      testMatch: '**/*.spec.js',
+      testMatch: '**/ticker-detection.spec.js',
       use: {
         // Unit tests don't need browser context
+      },
+    },
+    {
+      name: 'integration-tests',
+      testMatch: '**/bot-integration.spec.js',
+      use: {
+        // Integration tests for Discord bot functionality
       },
     },
   ],

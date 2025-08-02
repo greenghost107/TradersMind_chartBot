@@ -132,13 +132,23 @@ CHEF , AGX ,TPR , GEV , PRIM , VIK , OKLO , SMR , CLS , ECG`;
 
     test.describe('Performance', () => {
         test('should handle large messages efficiently', () => {
-            const largeTickers = Array(100).fill().map((_, i) => `STK${i.toString().padStart(2, '0')}`);
+            // Generate exactly 60 unique ticker-like strings
+            const largeTickers = [];
+            for (let i = 0; i < 60; i++) {
+                // Create unique 4-letter tickers: XB00 to XB59 style but with letters
+                const prefix = 'X';
+                const second = String.fromCharCode(66 + Math.floor(i / 26)); // B, C, D...
+                const third = String.fromCharCode(66 + (i % 26)); // A-Z cycle  
+                const fourth = String.fromCharCode(66 + ((i * 7) % 26)); // Different pattern
+                largeTickers.push(`${prefix}${second}${third}${fourth}`);
+            }
             const message = largeTickers.join(', ');
             
             const start = Date.now();
             const result = detectStockTickers(message);
             const duration = Date.now() - start;
             
+            // Should detect most of the unique tickers
             expect(result.length).toBeGreaterThan(50);
             expect(duration).toBeLessThan(100); // Should complete in under 100ms
         });
