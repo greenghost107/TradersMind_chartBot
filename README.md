@@ -144,10 +144,45 @@ tradersmind_discord/
 
 ### Scripts
 ```bash
-npm start      # Production start
-npm run dev    # Development with nodemon
-npm test       # Run tests
+npm start          # Production start (new structure)
+npm run start:old  # Production start (legacy bot.js)
+npm run dev        # Development with nodemon (new structure)
+npm run dev:old    # Development with nodemon (legacy bot.js)
+npm test           # Run tests
 ```
+
+### Code Structure
+
+The bot has been refactored into a modular architecture for better maintainability:
+
+```
+src/
+├── index.js                    # Main entry point
+├── config/
+│   ├── environment.js          # Environment validation & config
+│   └── discord.js              # Discord client setup
+├── services/
+│   ├── stockService.js         # Stock data fetching & caching
+│   ├── chartService.js         # Chart generation
+│   └── threadService.js        # Thread management
+├── handlers/
+│   ├── messageHandler.js       # Message event handling
+│   ├── interactionHandler.js   # Button interaction handling
+│   └── errorHandler.js         # Global error handling
+├── utils/
+│   ├── ticker-detector.js      # Ticker detection (moved from root)
+│   └── logger.js               # Structured logging
+└── constants/
+    └── config.js               # Constants & configuration
+```
+
+**Benefits of new structure:**
+- ✅ Better separation of concerns
+- ✅ Improved testability
+- ✅ Easier to maintain and extend
+- ✅ Better error handling
+- ✅ Structured logging
+- ✅ Configuration management
 
 ## Testing
 

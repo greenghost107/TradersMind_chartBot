@@ -1,0 +1,270 @@
+/**
+ * TradersMind Discord Bot - Main Entry Point
+ * Refactored for better structure and maintainability
+ */
+
+const Environment = require('./config/environment');
+const DiscordConfig = require('./config/discord');
+const StockService = require('./services/stockService');
+const ChartService = require('./services/chartService');
+const ThreadService = require('./services/threadService');
+const MessageHandler = require('./handlers/messageHandler');
+const InteractionHandler = require('./handlers/interactionHandler');
+const ErrorHandler = require('./handlers/errorHandler');
+
+class TradersMindsBot {
+    constructor() {
+        this.environment = null;
+        this.discordConfig = null;
+        this.client = null;
+        this.services = {};
+        this.handlers = {};
+        this.isRunning = false;
+    }
+
+    /**
+     * Initialize the bot and all its services
+     */
+    async initialize() {
+        try {
+            console.log('🚀 Starting TradersMind Discord Bot...');
+            
+            // Initialize configuration
+            this.environment = new Environment();
+            this.environment.printConfigSummary();
+            
+            // Initialize error handler first
+            this.handlers.error = new ErrorHandler();
+            
+            // Initialize services
+            this.services.stock = new StockService();
+            this.services.chart = new ChartService(this.services.stock);
+            this.services.thread = new ThreadService();
+            
+            // Initialize handlers
+            this.handlers.message = new MessageHandler();
+            this.handlers.interaction = new InteractionHandler(
+                this.services.stock,
+                this.services.chart,
+                this.services.thread
+            );
+            
+            // Initialize Discord client
+            this.discordConfig = new DiscordConfig(this.environment);
+            this.client = this.discordConfig.createClient();
+            
+            // Setup event listeners
+            this.setupEventListeners();
+            
+            console.log('✅ Bot initialization completed');
+            
+        } catch (error) {
+            console.error('❌ Failed to initialize bot:', error.message);
+            throw error;
+        }
+    }
+
+    /**
+     * Setup Discord event listeners
+     */
+    setupEventListeners() {
+        // Message events
+        this.client.on('messageCreate', async (message) => {
+            try {
+                await this.handlers.message.handleMessage(message);
+            } catch (error) {
+                this.handlers.error.handleDiscordError(error, {
+                    action: 'message_handling',
+                    messageId: message.id,
+                    authorId: message.author.id
+                });
+            }
+        });
+
+        // Interaction events
+        this.client.on('interactionCreate', async (interaction) => {
+            try {
+                await this.handlers.interaction.handleInteraction(interaction);
+            } catch (error) {
+                this.handlers.error.handleDiscordError(error, {
+                    action: 'interaction_handling',
+                    interactionId: interaction.id,
+                    userId: interaction.user.id,
+                    customId: interaction.customId
+                });
+            }
+        });
+
+        // Global error handling
+        this.client.on('error', (error) => {
+            this.handlers.error.handleDiscordError(error, {
+                action: 'discord_client_error'
+            });
+        });
+
+        // Ready event
+        this.client.on('ready', () => {
+            this.isRunning = true;
+            this.startPeriodicTasks();
+        });
+    }
+
+    /**
+     * Start periodic maintenance tasks
+     */
+    startPeriodicTasks() {
+        // Cleanup tasks are already started in services, but we can add monitoring here
+        setInterval(() => {
+            this.logStats();
+        }, 300000); // Log stats every 5 minutes
+
+        setInterval(() => {
+            this.healthCheck();
+        }, 60000); // Health check every minute
+    }
+
+    /**
+     * Log bot statistics
+     */
+    logStats() {
+        try {
+            const discordStats = this.discordConfig.getStats();
+            const errorStats = this.handlers.error.getErrorStats();
+            const threadCount = this.services.thread.getActiveThreadCount();
+            
+            console.log('📊 Bot Statistics:');
+            console.log(`   Guilds: ${discordStats.guilds}`);
+            console.log(`   Active Threads: ${threadCount}`);
+            console.log(`   Recent Errors: ${errorStats.recentErrors}`);
+            console.log(`   Uptime: ${Math.floor(discordStats.uptime / 1000 / 60)} minutes`);
+            console.log(`   Ping: ${discordStats.ping}ms`);
+        } catch (error) {
+            this.handlers.error.handleError(error, { action: 'stats_logging' });
+        }
+    }
+
+    /**
+     * Perform health checks
+     */
+    healthCheck() {
+        try {
+            const isHealthy = this.handlers.error.isSystemHealthy();
+            const isDiscordReady = this.discordConfig.isReady();
+            
+            if (!isHealthy) {
+                console.warn('⚠️  System health check failed - high error rate detected');
+            }
+            
+            if (!isDiscordReady) {
+                console.warn('⚠️  Discord client is not ready');
+            }
+            
+            // Log health status in development mode
+            if (this.environment.isDevelopment()) {
+                console.log(`💚 Health Check: Discord=${isDiscordReady ? '✅' : '❌'}, Errors=${isHealthy ? '✅' : '❌'}`);
+            }
+        } catch (error) {
+            this.handlers.error.handleError(error, { action: 'health_check' });
+        }
+    }
+
+    /**
+     * Start the bot
+     */
+    async start() {
+        try {
+            await this.initialize();
+            await this.discordConfig.login();
+            
+            console.log('🎉 TradersMind Discord Bot is now running!');
+            
+            // Setup graceful shutdown
+            this.setupShutdownHandlers();
+            
+        } catch (error) {
+            console.error('❌ Failed to start bot:', error.message);
+            process.exit(1);
+        }
+    }
+
+    /**
+     * Setup graceful shutdown handlers
+     */
+    setupShutdownHandlers() {
+        const shutdown = async (signal) => {
+            console.log(`\n🛑 Received ${signal}. Gracefully shutting down...`);
+            await this.shutdown();
+            process.exit(0);
+        };
+
+        process.on('SIGINT', () => shutdown('SIGINT'));
+        process.on('SIGTERM', () => shutdown('SIGTERM'));
+        
+        process.on('uncaughtException', (error) => {
+            this.handlers.error.handleError(error, { action: 'uncaught_exception' });
+            console.error('🚨 Uncaught Exception:', error);
+            process.exit(1);
+        });
+
+        process.on('unhandledRejection', (reason, promise) => {
+            this.handlers.error.handleError(new Error(`Unhandled Rejection: ${reason}`), { 
+                action: 'unhandled_rejection',
+                promise: promise.toString()
+            });
+            console.error('🚨 Unhandled Rejection:', reason);
+        });
+    }
+
+    /**
+     * Gracefully shutdown the bot
+     */
+    async shutdown() {
+        try {
+            this.isRunning = false;
+            
+            console.log('🧹 Cleaning up resources...');
+            
+            // Cleanup services
+            if (this.services.thread) {
+                this.services.thread.cleanupExpiredThreads();
+            }
+            
+            if (this.services.stock) {
+                this.services.stock.cleanupExpiredCache();
+            }
+            
+            // Shutdown Discord client
+            if (this.discordConfig) {
+                await this.discordConfig.shutdown();
+            }
+            
+            console.log('✅ Shutdown completed successfully');
+            
+        } catch (error) {
+            console.error('❌ Error during shutdown:', error.message);
+        }
+    }
+
+    /**
+     * Get bot status
+     */
+    getStatus() {
+        return {
+            running: this.isRunning,
+            discord: this.discordConfig ? this.discordConfig.getStats() : null,
+            errors: this.handlers.error ? this.handlers.error.getErrorStats() : null,
+            threads: this.services.thread ? this.services.thread.getActiveThreadCount() : 0
+        };
+    }
+}
+
+// Create and start the bot if this file is run directly
+if (require.main === module) {
+    const bot = new TradersMindsBot();
+    bot.start().catch(error => {
+        console.error('❌ Fatal error starting bot:', error);
+        process.exit(1);
+    });
+}
+
+module.exports = TradersMindsBot;

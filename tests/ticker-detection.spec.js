@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { detectStockTickers } = require('../utils/ticker-detector');
+const { detectStockTickers } = require('../src/utils/ticker-detector');
 
 test.describe('Stock Ticker Detection', () => {
     

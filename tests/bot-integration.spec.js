@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const { MockClient, mockStockData, mockChartBuffer } = require('./mocks/discord-mock');
 const { testUsers, testScenarios, threadNames, mockApiResponses } = require('./fixtures/test-users');
-const { detectStockTickers } = require('../utils/ticker-detector');
+const { detectStockTickers } = require('../src/utils/ticker-detector');
 
 // Mock modules for testing
 const mockModules = {
