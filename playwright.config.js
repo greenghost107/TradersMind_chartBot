@@ -32,5 +32,19 @@ module.exports = defineConfig({
         // Integration tests for Discord bot functionality
       },
     },
+    {
+      name: 'retention-tests',
+      testMatch: '**/retention-policy.spec.js',
+      use: {
+        // Retention policy tests
+      },
+    },
+    {
+      name: 'fallback-tests',
+      testMatch: '**/yahoo-fallback.spec.js',
+      use: {
+        // Yahoo Finance fallback tests
+      },
+    },
   ],
 });

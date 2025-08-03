@@ -4,11 +4,13 @@
 
 const axios = require('axios');
 const { logger } = require('../utils/logger');
+const YahooFinanceService = require('./yahooFinanceService');
 
 class StockService {
     constructor() {
         this.stockCache = new Map();
         this.apiKey = process.env.ALPHA_VANTAGE_API_KEY;
+        this.yahooService = new YahooFinanceService();
         
         // Auto-cleanup expired cache entries every hour
         setInterval(() => this.cleanupExpiredCache(), 3600000);
@@ -60,7 +62,7 @@ class StockService {
     }
 
     /**
-     * Fetch stock data with caching
+     * Fetch stock data with caching and fallback to Yahoo Finance
      */
     async fetchStockData(ticker) {
         // Check cache first
@@ -72,53 +74,9 @@ class StockService {
             return cachedData.stockData;
         }
         
+        // Try Alpha Vantage first
         try {
-            logger.logWithPrefix('🌐', `Fetching fresh data for ${ticker}`);
-            
-            if (!this.apiKey) {
-                throw new Error('API key not configured');
-            }
-
-            const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${ticker}&apikey=${this.apiKey}&outputsize=compact`;
-            const response = await axios.get(url);
-            const data = response.data;
-            
-            if (data['Error Message']) {
-                throw new Error('Stock not found');
-            }
-
-            if (data['Note']) {
-                throw new Error('API rate limit exceeded');
-            }
-
-            const timeSeries = data['Time Series (Daily)'];
-            const metaData = data['Meta Data'];
-            
-            if (!timeSeries) {
-                throw new Error('No data available');
-            }
-
-            const dates = Object.keys(timeSeries).slice(0, 30).reverse();
-            const prices = dates.map(date => parseFloat(timeSeries[date]['4. close']));
-            const volumes = dates.map(date => parseInt(timeSeries[date]['5. volume']));
-            
-            const latestDate = Object.keys(timeSeries)[0];
-            const latestData = timeSeries[latestDate];
-            const currentPrice = parseFloat(latestData['4. close']);
-            const previousPrice = parseFloat(timeSeries[Object.keys(timeSeries)[1]]['4. close']);
-            const change = currentPrice - previousPrice;
-            const changePercent = ((change / previousPrice) * 100).toFixed(2);
-
-            const stockData = {
-                symbol: ticker,
-                currentPrice: currentPrice.toFixed(2),
-                change: change.toFixed(2),
-                changePercent,
-                dates,
-                prices,
-                volumes,
-                company: metaData['2. Symbol']
-            };
+            const stockData = await this.fetchFromAlphaVantage(ticker);
             
             // Cache the fresh data
             this.stockCache.set(cacheKey, {
@@ -127,11 +85,91 @@ class StockService {
                 timestamp: new Date()
             });
             
-            logger.logWithPrefix('💾', `Cached fresh data for ${ticker}`);
+            logger.logWithPrefix('💾', `Cached fresh data for ${ticker} (Alpha Vantage)`);
             return stockData;
-        } catch (error) {
-            throw error;
+            
+        } catch (alphaError) {
+            logger.warn('Alpha Vantage failed, trying Yahoo Finance fallback', {
+                ticker,
+                alphaError: alphaError.message
+            });
+            
+            // Fallback to Yahoo Finance
+            try {
+                const stockData = await this.yahooService.fetchStockData(ticker);
+                
+                // Cache the fallback data
+                this.stockCache.set(cacheKey, {
+                    stockData,
+                    chartBuffer: null,
+                    timestamp: new Date()
+                });
+                
+                logger.logWithPrefix('💾', `Cached fresh data for ${ticker} (Yahoo Finance fallback)`);
+                return stockData;
+                
+            } catch (yahooError) {
+                logger.error('Both data sources failed', {
+                    ticker,
+                    alphaError: alphaError.message,
+                    yahooError: yahooError.message
+                });
+                throw new Error(`Failed to fetch data for ${ticker}: Alpha Vantage (${alphaError.message}), Yahoo Finance (${yahooError.message})`);
+            }
         }
+    }
+
+    /**
+     * Fetch stock data from Alpha Vantage API
+     */
+    async fetchFromAlphaVantage(ticker) {
+        logger.logWithPrefix('🌐', `Fetching fresh data for ${ticker} from Alpha Vantage`);
+        
+        if (!this.apiKey) {
+            throw new Error('Alpha Vantage API key not configured');
+        }
+
+        const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${ticker}&apikey=${this.apiKey}&outputsize=compact`;
+        const response = await axios.get(url);
+        const data = response.data;
+        
+        if (data['Error Message']) {
+            throw new Error('Stock not found');
+        }
+
+        if (data['Note']) {
+            throw new Error('API rate limit exceeded');
+        }
+
+        const timeSeries = data['Time Series (Daily)'];
+        const metaData = data['Meta Data'];
+        
+        if (!timeSeries) {
+            throw new Error('No data available');
+        }
+
+        const dates = Object.keys(timeSeries).slice(0, 30).reverse();
+        const prices = dates.map(date => parseFloat(timeSeries[date]['4. close']));
+        const volumes = dates.map(date => parseInt(timeSeries[date]['5. volume']));
+        
+        const latestDate = Object.keys(timeSeries)[0];
+        const latestData = timeSeries[latestDate];
+        const currentPrice = parseFloat(latestData['4. close']);
+        const previousPrice = parseFloat(timeSeries[Object.keys(timeSeries)[1]]['4. close']);
+        const change = currentPrice - previousPrice;
+        const changePercent = ((change / previousPrice) * 100).toFixed(2);
+
+        return {
+            symbol: ticker,
+            currentPrice: currentPrice.toFixed(2),
+            change: change.toFixed(2),
+            changePercent,
+            dates,
+            prices,
+            volumes,
+            company: metaData['2. Symbol'],
+            source: 'alphavantage'
+        };
     }
 
     /**

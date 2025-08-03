@@ -25,20 +25,25 @@ class MockEnvironment {
 // Mock Discord client
 class MockDiscordClient {
     constructor() {
-        this.channels = new Map();
+        this._channelsMap = new Map();
         this.deletedMessages = [];
     }
 
     async fetchChannel(channelId) {
-        return this.channels.get(channelId);
+        return this._channelsMap.get(channelId);
     }
 
     get channels() {
         return {
             fetch: async (channelId) => {
-                return this.channels.get(channelId);
+                return this._channelsMap.get(channelId);
             }
         };
+    }
+
+    // Helper method for tests to add channels
+    addChannel(channel) {
+        this._channelsMap.set(channel.id, channel);
     }
 }
 
@@ -46,20 +51,23 @@ class MockDiscordClient {
 class MockDiscordChannel {
     constructor(id) {
         this.id = id;
-        this.messages = new Map();
+        this._messagesMap = new Map();
         this.deletedMessages = [];
     }
 
     get messages() {
         return {
             fetch: async (messageId) => {
-                const message = this.messages.get(messageId);
+                const message = this._messagesMap.get(messageId);
                 if (!message) {
                     const error = new Error('Unknown Message');
                     error.code = 10008;
                     throw error;
                 }
                 return message;
+            },
+            has: (messageId) => {
+                return this._messagesMap.has(messageId);
             }
         };
     }
@@ -69,12 +77,12 @@ class MockDiscordChannel {
             id: messageId,
             content,
             delete: async () => {
-                this.messages.delete(messageId);
+                this._messagesMap.delete(messageId);
                 this.deletedMessages.push(messageId);
                 return true;
             }
         };
-        this.messages.set(messageId, message);
+        this._messagesMap.set(messageId, message);
         return message;
     }
 }
@@ -148,7 +156,7 @@ test.describe('Retention Policy Tests', () => {
         // Setup mock Discord client and channel
         mockClient = new MockDiscordClient();
         mockChannel = new MockDiscordChannel('test_channel_123');
-        mockClient.channels.set('test_channel_123', mockChannel);
+        mockClient.addChannel(mockChannel);
         
         retentionService = new RetentionService(
             mockClient, 
@@ -284,9 +292,9 @@ test.describe('Retention Policy Tests', () => {
             // Run retention cleanup
             await retentionService.runCleanup();
             
-            // Verify cache was cleaned up
-            expect(mockStockService.clearedKeys).toHaveLength(1);
-            expect(mockChartService.clearedKeys).toHaveLength(1);
+            // Verify cache was cleaned up (both stock and chart keys)
+            expect(mockStockService.clearedKeys).toHaveLength(2);
+            expect(mockChartService.clearedKeys).toHaveLength(2);
             expect(mockStockService.clearedKeys).toContain('stock_AAPL_2024-01-01');
             expect(mockChartService.clearedKeys).toContain('chart_AAPL_2024-01-01');
         });
@@ -354,9 +362,9 @@ test.describe('Retention Policy Tests', () => {
                 expect(mockChannel.deletedMessages).toContain(`expired_batch_${i}`);
             }
             
-            // Verify cache cleanup for all
-            expect(mockStockService.clearedKeys).toHaveLength(5);
-            expect(mockChartService.clearedKeys).toHaveLength(5);
+            // Verify cache cleanup for all (5 messages × 2 keys each = 10)
+            expect(mockStockService.clearedKeys).toHaveLength(10);
+            expect(mockChartService.clearedKeys).toHaveLength(10);
         });
 
         test('should clean up tracking data with safety buffer', () => {
