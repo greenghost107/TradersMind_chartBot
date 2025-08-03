@@ -8,9 +8,12 @@ const DiscordConfig = require('./config/discord');
 const StockService = require('./services/stockService');
 const ChartService = require('./services/chartService');
 const ThreadService = require('./services/threadService');
+const MessageTrackingService = require('./services/messageTrackingService');
+const RetentionService = require('./services/retentionService');
 const MessageHandler = require('./handlers/messageHandler');
 const InteractionHandler = require('./handlers/interactionHandler');
 const ErrorHandler = require('./handlers/errorHandler');
+const { logger } = require('./utils/logger');
 
 class TradersMindsBot {
     constructor() {
@@ -38,15 +41,17 @@ class TradersMindsBot {
             
             // Initialize services
             this.services.stock = new StockService();
-            this.services.chart = new ChartService(this.services.stock);
+            this.services.messageTracking = new MessageTrackingService(this.environment);
+            this.services.chart = new ChartService(this.services.stock, this.services.messageTracking);
             this.services.thread = new ThreadService();
             
-            // Initialize handlers
-            this.handlers.message = new MessageHandler();
+            // Initialize handlers with message tracking
+            this.handlers.message = new MessageHandler(this.services.messageTracking);
             this.handlers.interaction = new InteractionHandler(
                 this.services.stock,
                 this.services.chart,
-                this.services.thread
+                this.services.thread,
+                this.services.messageTracking
             );
             
             // Initialize Discord client
@@ -56,7 +61,16 @@ class TradersMindsBot {
             // Setup event listeners
             this.setupEventListeners();
             
-            console.log('✅ Bot initialization completed');
+            // Initialize retention service after Discord client is ready
+            this.services.retention = new RetentionService(
+                this.client,
+                this.services.messageTracking,
+                this.services.stock,
+                this.services.chart,
+                this.environment
+            );
+            
+            logger.success('Bot initialization completed');
             
         } catch (error) {
             console.error('❌ Failed to initialize bot:', error.message);
@@ -106,6 +120,12 @@ class TradersMindsBot {
         this.client.on('ready', () => {
             this.isRunning = true;
             this.startPeriodicTasks();
+            
+            // Start retention service after Discord client is ready
+            if (this.services.retention) {
+                this.services.retention.start(60); // Run cleanup every 60 minutes
+                logger.info('Retention service started with 60-minute intervals');
+            }
         });
     }
 
@@ -113,14 +133,22 @@ class TradersMindsBot {
      * Start periodic maintenance tasks
      */
     startPeriodicTasks() {
-        // Cleanup tasks are already started in services, but we can add monitoring here
+        // Log stats every 5 minutes
         setInterval(() => {
             this.logStats();
-        }, 300000); // Log stats every 5 minutes
+        }, 300000);
 
+        // Health check every minute
         setInterval(() => {
             this.healthCheck();
-        }, 60000); // Health check every minute
+        }, 60000);
+        
+        // Chart cache cleanup every hour
+        setInterval(() => {
+            if (this.services.chart) {
+                this.services.chart.cleanupExpiredCache();
+            }
+        }, 3600000);
     }
 
     /**
@@ -131,13 +159,20 @@ class TradersMindsBot {
             const discordStats = this.discordConfig.getStats();
             const errorStats = this.handlers.error.getErrorStats();
             const threadCount = this.services.thread.getActiveThreadCount();
+            const retentionStats = this.services.retention ? this.services.retention.getStatus() : null;
+            const stockCacheStats = this.services.stock ? this.services.stock.getCacheStats() : null;
+            const chartCacheStats = this.services.chart ? this.services.chart.getCacheStats() : null;
             
-            console.log('📊 Bot Statistics:');
-            console.log(`   Guilds: ${discordStats.guilds}`);
-            console.log(`   Active Threads: ${threadCount}`);
-            console.log(`   Recent Errors: ${errorStats.recentErrors}`);
-            console.log(`   Uptime: ${Math.floor(discordStats.uptime / 1000 / 60)} minutes`);
-            console.log(`   Ping: ${discordStats.ping}ms`);
+            logger.info('Bot Statistics', {
+                guilds: discordStats.guilds,
+                activeThreads: threadCount,
+                recentErrors: errorStats.recentErrors,
+                uptimeMinutes: Math.floor(discordStats.uptime / 1000 / 60),
+                ping: discordStats.ping,
+                retention: retentionStats,
+                stockCache: stockCacheStats?.size || 0,
+                chartCache: chartCacheStats?.size || 0
+            });
         } catch (error) {
             this.handlers.error.handleError(error, { action: 'stats_logging' });
         }
@@ -222,7 +257,12 @@ class TradersMindsBot {
         try {
             this.isRunning = false;
             
-            console.log('🧹 Cleaning up resources...');
+            logger.info('Cleaning up resources...');
+            
+            // Stop retention service
+            if (this.services.retention) {
+                this.services.retention.stop();
+            }
             
             // Cleanup services
             if (this.services.thread) {
@@ -233,12 +273,16 @@ class TradersMindsBot {
                 this.services.stock.cleanupExpiredCache();
             }
             
+            if (this.services.chart) {
+                this.services.chart.cleanupExpiredCache();
+            }
+            
             // Shutdown Discord client
             if (this.discordConfig) {
                 await this.discordConfig.shutdown();
             }
             
-            console.log('✅ Shutdown completed successfully');
+            logger.success('Shutdown completed successfully');
             
         } catch (error) {
             console.error('❌ Error during shutdown:', error.message);
@@ -253,7 +297,10 @@ class TradersMindsBot {
             running: this.isRunning,
             discord: this.discordConfig ? this.discordConfig.getStats() : null,
             errors: this.handlers.error ? this.handlers.error.getErrorStats() : null,
-            threads: this.services.thread ? this.services.thread.getActiveThreadCount() : 0
+            threads: this.services.thread ? this.services.thread.getActiveThreadCount() : 0,
+            retention: this.services.retention ? this.services.retention.getStatus() : null,
+            stockCache: this.services.stock ? this.services.stock.getCacheStats() : null,
+            chartCache: this.services.chart ? this.services.chart.getCacheStats() : null
         };
     }
 }

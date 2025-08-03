@@ -4,10 +4,11 @@
 
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { detectStockTickers } = require('../utils/ticker-detector');
+const { logger } = require('../utils/logger');
 
 class MessageHandler {
-    constructor() {
-        // Handler doesn't need dependencies injected for message processing
+    constructor(messageTrackingService = null) {
+        this.messageTrackingService = messageTrackingService;
     }
 
     /**
@@ -21,17 +22,36 @@ class MessageHandler {
         const tickers = detectStockTickers(message.content);
         
         if (tickers.length > 0) {
-            console.log(`📊 Detected: ${tickers.join(', ')}`);
+            logger.logWithPrefix('📊', `Detected: ${tickers.join(', ')}`);
             
             try {
                 // Create interactive buttons for detected tickers
                 const actionRows = this.createTickerButtons(tickers);
                 
-                await message.reply({
+                const buttonMessage = await message.reply({
                     components: actionRows
                 });
+
+                // Track button message for retention if tracking service is available
+                if (this.messageTrackingService) {
+                    this.messageTrackingService.trackButtonMessage(
+                        buttonMessage.id,
+                        message.channel.id,
+                        tickers
+                    );
+                }
+
+                logger.debug('Button message created and tracked', {
+                    messageId: buttonMessage.id,
+                    channelId: message.channel.id,
+                    tickers: tickers.length
+                });
+
             } catch (error) {
-                console.error('Error creating ticker buttons:', error);
+                logger.error('Error creating ticker buttons', {
+                    tickers,
+                    error: error.message
+                });
                 // Ignore reply errors - don't want to crash the bot
             }
         }

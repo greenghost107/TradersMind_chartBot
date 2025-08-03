@@ -108,6 +108,31 @@ class Environment {
     }
 
     /**
+     * Get message retention hours
+     */
+    getMessageRetentionHours() {
+        const hours = parseInt(process.env.MESSAGE_RETENTION_HOURS);
+        if (isNaN(hours) || hours < 1 || hours > 168) { // Max 1 week
+            return 26; // Default 26 hours
+        }
+        return hours;
+    }
+
+    /**
+     * Get message retention in milliseconds
+     */
+    getMessageRetentionMs() {
+        return this.getMessageRetentionHours() * 60 * 60 * 1000;
+    }
+
+    /**
+     * Get safety buffer for message retention (retention + 4 hours)
+     */
+    getMessageRetentionSafetyBufferMs() {
+        return (this.getMessageRetentionHours() + 4) * 60 * 60 * 1000;
+    }
+
+    /**
      * Get thread cleanup interval in milliseconds
      */
     getThreadCleanupInterval() {
@@ -151,6 +176,11 @@ class Environment {
             threads: {
                 cleanupInterval: this.getThreadCleanupInterval()
             },
+            retention: {
+                hours: this.getMessageRetentionHours(),
+                milliseconds: this.getMessageRetentionMs(),
+                safetyBufferMs: this.getMessageRetentionSafetyBufferMs()
+            },
             limits: {
                 maxTickersPerMessage: this.getMaxTickersPerMessage(),
                 chartTimeout: this.getChartTimeout()
@@ -169,6 +199,7 @@ class Environment {
         console.log(`   Log Level: ${config.logging.level}`);
         console.log(`   Cache TTL: ${config.cache.ttl / 1000 / 60 / 60} hours`);
         console.log(`   Thread Cleanup: ${config.threads.cleanupInterval / 1000 / 60 / 60} hours`);
+        console.log(`   Message Retention: ${config.retention.hours} hours`);
         console.log(`   Max Tickers: ${config.limits.maxTickersPerMessage}`);
         console.log(`   Chart Timeout: ${config.limits.chartTimeout / 1000} seconds`);
         console.log(`   Discord Token: ${config.discord.token ? '✅ Set' : '❌ Missing'}`);

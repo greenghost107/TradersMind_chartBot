@@ -2,6 +2,51 @@
 
 A Discord bot that automatically detects stock tickers in messages and generates interactive buttons to view stock charts in dedicated user threads.
 
+## Bot Functionality Overview
+
+### Real-Time Message Scanning
+The bot continuously monitors **all messages** posted in Discord channels where it has access. Every message is automatically scanned for potential stock ticker symbols using advanced pattern recognition.
+
+### Intelligent Ticker Detection
+- **Pattern Recognition**: Uses regex to identify 1-5 character uppercase sequences (e.g., AAPL, TSLA, CHEF, OKLO)
+- **Smart Filtering**: Excludes common English words (THE, AND, FOR, etc.) to prevent false positives
+- **Multiple Formats**: Detects tickers in various formats:
+  - Comma-separated: `CHEF, AGX, TPR`
+  - Space-separated: `AAPL TSLA MSFT`
+  - Dollar prefixed: `$AAPL $TSLA`
+  - Mixed with text: `Trading OKLO today`
+  - Hebrew mixed content: `מניות CHEF ו-AGX עולות`
+
+### Interactive Button System
+- **Automatic Generation**: Creates clickable buttons for **every detected ticker** (up to 25 per message)
+- **Multiple Rows**: Organizes buttons in rows of 5 for clean presentation
+- **Instant Response**: Buttons appear immediately after message scanning
+
+### Personal Thread Management
+- **Individual Threads**: Each user gets their own dedicated thread for chart viewing
+- **Thread Isolation**: Users can only see their own threads, ensuring privacy
+- **Thread Reuse**: Same user clicking multiple tickers uses the same thread
+- **Auto-Archive**: Threads automatically archive after 1 hour of inactivity
+
+### Configurable Retention Policy
+- **Automatic Cleanup**: Bot-created messages are automatically deleted after configurable hours (default: 26 hours)
+- **Cache Management**: When messages are deleted, associated cached chart data is also removed
+- **Storage Efficiency**: Prevents Discord channel clutter and reduces storage usage
+- **Background Processing**: Cleanup happens automatically without user intervention
+- **Customizable Duration**: Set `MESSAGE_RETENTION_HOURS` environment variable (1-168 hours)
+
+### Real-Time Chart Generation
+- **Live Data**: Fetches real-time stock prices from Alpha Vantage API
+- **Interactive Charts**: Generates professional charts using Chart.js and Puppeteer
+- **Instant Delivery**: Charts appear directly in user threads within seconds
+- **Silent Operation**: No confirmation messages or unnecessary notifications
+
+### Caching & Performance
+- **Smart Caching**: Daily cache for stock data and generated charts
+- **API Efficiency**: Reduces API calls by reusing same-day data
+- **Automatic Cleanup**: Cached data is cleaned up when associated messages are deleted
+- **Memory Management**: Expired cache entries are automatically removed
+
 ## System Requirements
 
 - **Node.js**: Version 16.0.0 or higher
@@ -30,6 +75,11 @@ Create a `.env` file in the root directory with:
 ```env
 DISCORD_BOT_TOKEN=your_discord_bot_token_here
 ALPHA_VANTAGE_API_KEY=your_alpha_vantage_api_key_here
+
+# Optional Configuration
+MESSAGE_RETENTION_HOURS=26        # How long to keep bot messages before deletion (1-168 hours, default: 26)
+LOG_LEVEL=info                    # Logging level: debug, info, warn, error (default: info)
+CACHE_TTL_HOURS=24               # How long to cache stock data (default: 24 hours)
 ```
 
 ### 3. Get Required API Keys

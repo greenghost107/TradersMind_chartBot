@@ -3,24 +3,41 @@
  */
 
 const puppeteer = require('puppeteer');
+const { logger } = require('../utils/logger');
 
 class ChartService {
-    constructor(stockService) {
+    constructor(stockService, messageTrackingService = null) {
         this.stockService = stockService;
+        this.messageTrackingService = messageTrackingService;
+        this.chartCache = new Map();
     }
 
     /**
      * Generate stock chart using Puppeteer and Chart.js
      */
-    async generateChart(stockData) {
+    async generateChart(stockData, messageId = null, channelId = null, userId = null) {
         // Check if chart is already cached
-        const cachedChart = this.stockService.getCachedChart(stockData.symbol);
+        const cacheKey = this.getChartCacheKey(stockData.symbol);
+        const cachedChart = this.getFromCache(cacheKey);
         if (cachedChart) {
+            logger.debug('Using cached chart', { ticker: stockData.symbol });
+            
+            // Track message with cache key if tracking is enabled
+            if (this.messageTrackingService && messageId) {
+                this.messageTrackingService.trackMessage(
+                    messageId, 
+                    channelId, 
+                    userId, 
+                    stockData.symbol, 
+                    [cacheKey]
+                );
+            }
+            
             return cachedChart;
         }
         
         try {
-            console.log(`📊 Generating fresh chart for ${stockData.symbol}...`);
+            logger.logWithPrefix('📊', `Generating fresh chart for ${stockData.symbol}`);
             
             const browser = await puppeteer.launch({ 
                 headless: true,
@@ -50,12 +67,32 @@ class ChartService {
             
             await browser.close();
             
-            // Cache the generated chart
-            this.stockService.setCachedChart(stockData.symbol, chartBuffer);
+            // Cache the generated chart with timestamp
+            this.setInCache(cacheKey, chartBuffer);
+            
+            // Track message with cache key if tracking is enabled
+            if (this.messageTrackingService && messageId) {
+                this.messageTrackingService.trackMessage(
+                    messageId, 
+                    channelId, 
+                    userId, 
+                    stockData.symbol, 
+                    [cacheKey]
+                );
+            }
+            
+            logger.success('Chart generated and cached', { 
+                ticker: stockData.symbol,
+                cacheKey 
+            });
             
             return chartBuffer;
             
         } catch (error) {
+            logger.error('Chart generation failed', {
+                ticker: stockData.symbol,
+                error: error.message
+            });
             throw new Error(`Chart generation failed: ${error.message}`);
         }
     }
@@ -139,6 +176,95 @@ class ChartService {
             .setImage('attachment://chart.png');
 
         return embed;
+    }
+
+    /**
+     * Generate cache key for chart data
+     * @param {string} ticker - Stock ticker symbol
+     * @returns {string} Cache key
+     */
+    getChartCacheKey(ticker) {
+        const today = new Date().toISOString().split('T')[0];
+        return `chart_${ticker}_${today}`;
+    }
+
+    /**
+     * Get chart from cache
+     * @param {string} cacheKey - Cache key
+     * @returns {Buffer|null} Cached chart buffer or null
+     */
+    getFromCache(cacheKey) {
+        const cacheEntry = this.chartCache.get(cacheKey);
+        if (!cacheEntry) {
+            return null;
+        }
+
+        // Check if cache entry is still valid (same day)
+        const today = new Date().toISOString().split('T')[0];
+        if (cacheEntry.date !== today) {
+            this.chartCache.delete(cacheKey);
+            return null;
+        }
+
+        return cacheEntry.data;
+    }
+
+    /**
+     * Store chart in cache
+     * @param {string} cacheKey - Cache key
+     * @param {Buffer} chartBuffer - Chart data to cache
+     */
+    setInCache(cacheKey, chartBuffer) {
+        const today = new Date().toISOString().split('T')[0];
+        this.chartCache.set(cacheKey, {
+            data: chartBuffer,
+            date: today,
+            timestamp: Date.now()
+        });
+    }
+
+    /**
+     * Clear specific entry from cache
+     * @param {string} cacheKey - Cache key to remove
+     * @returns {boolean} True if entry was removed
+     */
+    clearFromCache(cacheKey) {
+        return this.chartCache.delete(cacheKey);
+    }
+
+    /**
+     * Get cache statistics
+     * @returns {Object} Cache statistics
+     */
+    getCacheStats() {
+        return {
+            size: this.chartCache.size,
+            keys: Array.from(this.chartCache.keys())
+        };
+    }
+
+    /**
+     * Clean up expired cache entries
+     * @returns {number} Number of entries cleaned
+     */
+    cleanupExpiredCache() {
+        const today = new Date().toISOString().split('T')[0];
+        let cleaned = 0;
+
+        for (const [key, entry] of this.chartCache) {
+            if (entry.date !== today) {
+                this.chartCache.delete(key);
+                cleaned++;
+            }
+        }
+
+        if (cleaned > 0) {
+            logger.debug('Cleaned up expired chart cache entries', { 
+                entriesRemoved: cleaned 
+            });
+        }
+
+        return cleaned;
     }
 }
 

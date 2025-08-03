@@ -3,6 +3,7 @@
  */
 
 const axios = require('axios');
+const { logger } = require('../utils/logger');
 
 class StockService {
     constructor() {
@@ -37,15 +38,25 @@ class StockService {
      * Clean up expired cache entries
      */
     cleanupExpiredCache() {
-        console.log('🧹 Cleaning up expired cache entries...');
+        logger.debug('Cleaning up expired stock cache entries');
         const today = new Date().toISOString().split('T')[0];
+        let cleaned = 0;
         
         for (const [key, entry] of this.stockCache.entries()) {
             const cacheDate = new Date(entry.timestamp).toISOString().split('T')[0];
             if (cacheDate !== today) {
                 this.stockCache.delete(key);
+                cleaned++;
             }
         }
+        
+        if (cleaned > 0) {
+            logger.debug('Cleaned up expired stock cache entries', { 
+                entriesRemoved: cleaned 
+            });
+        }
+        
+        return cleaned;
     }
 
     /**
@@ -57,12 +68,12 @@ class StockService {
         const cachedData = this.stockCache.get(cacheKey);
         
         if (cachedData && this.isCacheValid(cachedData)) {
-            console.log(`📊 Using cached data for ${ticker}`);
+            logger.debug('Using cached stock data', { ticker });
             return cachedData.stockData;
         }
         
         try {
-            console.log(`🌐 Fetching fresh data for ${ticker}...`);
+            logger.logWithPrefix('🌐', `Fetching fresh data for ${ticker}`);
             
             if (!this.apiKey) {
                 throw new Error('API key not configured');
@@ -116,7 +127,7 @@ class StockService {
                 timestamp: new Date()
             });
             
-            console.log(`💾 Cached fresh data for ${ticker}`);
+            logger.logWithPrefix('💾', `Cached fresh data for ${ticker}`);
             return stockData;
         } catch (error) {
             throw error;
@@ -131,7 +142,7 @@ class StockService {
         const cachedData = this.stockCache.get(cacheKey);
         
         if (cachedData && this.isCacheValid(cachedData) && cachedData.chartBuffer) {
-            console.log(`📊 Using cached chart for ${ticker}`);
+            logger.debug('Using cached chart from stock service', { ticker });
             return cachedData.chartBuffer;
         }
         
@@ -147,7 +158,7 @@ class StockService {
         
         if (cachedEntry) {
             cachedEntry.chartBuffer = chartBuffer;
-            console.log(`💾 Cached fresh chart for ${ticker}`);
+            logger.debug('Chart cached in stock service', { ticker });
         } else {
             // Create new cache entry if it doesn't exist
             this.stockCache.set(cacheKey, {
@@ -156,6 +167,26 @@ class StockService {
                 timestamp: new Date()
             });
         }
+    }
+
+    /**
+     * Clear specific entry from cache by key
+     * @param {string} cacheKey - Cache key to remove
+     * @returns {boolean} True if entry was removed
+     */
+    clearFromCache(cacheKey) {
+        return this.stockCache.delete(cacheKey);
+    }
+
+    /**
+     * Get cache statistics
+     * @returns {Object} Cache statistics
+     */
+    getCacheStats() {
+        return {
+            size: this.stockCache.size,
+            keys: Array.from(this.stockCache.keys())
+        };
     }
 }
 
