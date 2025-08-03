@@ -37,7 +37,7 @@ class ChartService {
         }
         
         try {
-            logger.logWithPrefix('📊', `Generating fresh chart for ${stockData.symbol}`);
+            logger.logWithPrefix('📊', `Generated chart for ${stockData.symbol} (${stockData.source || 'unknown'})`);
             
             const browser = await puppeteer.launch({ 
                 headless: true,

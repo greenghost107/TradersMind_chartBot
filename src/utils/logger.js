@@ -127,7 +127,10 @@ class Logger {
 }
 
 // Create default logger instance
-const defaultLogger = new Logger(process.env.LOG_LEVEL || 'info');
+// Note: Environment class can't be imported here due to circular dependency
+// Use env var directly with same defaults as Environment class
+const logLevel = process.env.LOG_LEVEL || (process.env.NODE_ENV === 'development' ? 'debug' : 'info');
+const defaultLogger = new Logger(logLevel);
 
 module.exports = {
     Logger,

@@ -22,7 +22,7 @@ class MessageHandler {
         const tickers = detectStockTickers(message.content);
         
         if (tickers.length > 0) {
-            logger.logWithPrefix('📊', `Detected: ${tickers.join(', ')}`);
+            logger.debug(`Detected tickers: ${tickers.join(', ')}`);
             
             try {
                 // Create interactive buttons for detected tickers

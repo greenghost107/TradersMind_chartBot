@@ -85,7 +85,7 @@ class StockService {
                 timestamp: new Date()
             });
             
-            logger.logWithPrefix('💾', `Cached fresh data for ${ticker} (Alpha Vantage)`);
+            logger.debug(`Cached fresh data for ${ticker} (Alpha Vantage)`);
             return stockData;
             
         } catch (alphaError) {
@@ -105,7 +105,7 @@ class StockService {
                     timestamp: new Date()
                 });
                 
-                logger.logWithPrefix('💾', `Cached fresh data for ${ticker} (Yahoo Finance fallback)`);
+                logger.debug(`Cached fresh data for ${ticker} (Yahoo Finance fallback)`);
                 return stockData;
                 
             } catch (yahooError) {
@@ -123,7 +123,7 @@ class StockService {
      * Fetch stock data from Alpha Vantage API
      */
     async fetchFromAlphaVantage(ticker) {
-        logger.logWithPrefix('🌐', `Fetching fresh data for ${ticker} from Alpha Vantage`);
+        logger.debug(`Fetching fresh data for ${ticker} from Alpha Vantage`);
         
         if (!this.apiKey) {
             throw new Error('Alpha Vantage API key not configured');

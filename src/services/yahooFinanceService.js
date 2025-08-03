@@ -17,7 +17,7 @@ class YahooFinanceService {
      */
     async fetchStockData(ticker) {
         try {
-            logger.logWithPrefix('🟡', `Fetching data from Yahoo Finance for ${ticker}`);
+            logger.debug(`Fetching data from Yahoo Finance for ${ticker}`);
             
             // Get historical data (last 30 days)
             const endDate = new Date();

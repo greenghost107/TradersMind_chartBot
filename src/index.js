@@ -133,10 +133,10 @@ class TradersMindsBot {
      * Start periodic maintenance tasks
      */
     startPeriodicTasks() {
-        // Log stats every 5 minutes
+        // Log stats every 2 hours
         setInterval(() => {
             this.logStats();
-        }, 300000);
+        }, 7200000);
 
         // Health check every minute
         setInterval(() => {
