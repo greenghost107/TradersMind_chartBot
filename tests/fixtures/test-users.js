@@ -52,11 +52,15 @@ const testScenarios = {
 
 // Mock thread names for consistency
 const threadNames = {
-    getThreadName: (username) => `📊 ${username}'s Stock Charts`,
+    getThreadName: (user) => {
+        const displayName = typeof user === 'string' ? user : 
+            (user.displayName || user.globalName || user.username);
+        return `📊 ${displayName}'s Stock Charts`;
+    },
     
     // Expected thread names for test users
-    user2Thread: `📊 ${testUsers.buttonClicker.username}'s Stock Charts`,
-    user3Thread: `📊 ${testUsers.outsideUser.username}'s Stock Charts`
+    user2Thread: `📊 ${testUsers.buttonClicker.displayName || testUsers.buttonClicker.globalName || testUsers.buttonClicker.username}'s Stock Charts`,
+    user3Thread: `📊 ${testUsers.outsideUser.displayName || testUsers.outsideUser.globalName || testUsers.outsideUser.username}'s Stock Charts`
 };
 
 // Permission sets for testing

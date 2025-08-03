@@ -28,7 +28,7 @@ class ThreadService {
 
         // Create new thread for user
         const thread = await channel.threads.create({
-            name: `📊 ${user.username}'s Stock Charts`,
+            name: `📊 ${user.displayName || user.globalName || user.username}'s Stock Charts`,
             autoArchiveDuration: 60, // Auto-archive after 1 hour of inactivity
             reason: 'Stock chart viewing thread'
         });

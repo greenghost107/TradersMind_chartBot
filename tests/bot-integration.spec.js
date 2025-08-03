@@ -87,7 +87,7 @@ test.describe('Discord Bot Integration Tests', () => {
             
             // Simulate bot's getOrCreateUserThread logic
             const userThread = await testChannel.threads.create({
-                name: threadNames.getThreadName(buttonClicker.username),
+                name: threadNames.getThreadName(buttonClicker),
                 autoArchiveDuration: 60,
                 reason: 'Stock chart viewing thread',
                 ownerId: buttonClicker.id
@@ -168,7 +168,7 @@ test.describe('Discord Bot Integration Tests', () => {
             // User 2 clicks button - gets their thread
             const interaction1 = mockClient.simulateButtonClick(buttonClicker, 'stock_GOOGL', testChannel);
             const thread1 = await testChannel.threads.create({
-                name: threadNames.getThreadName(buttonClicker.username),
+                name: threadNames.getThreadName(buttonClicker),
                 ownerId: buttonClicker.id
             });
             userThreads.set(buttonClicker.id, thread1);
@@ -176,7 +176,7 @@ test.describe('Discord Bot Integration Tests', () => {
             // User 3 clicks same button - should get their own separate thread
             const interaction2 = mockClient.simulateButtonClick(outsideUser, 'stock_GOOGL', testChannel);
             const thread2 = await testChannel.threads.create({
-                name: threadNames.getThreadName(outsideUser.username),
+                name: threadNames.getThreadName(outsideUser),
                 ownerId: outsideUser.id
             });
             userThreads.set(outsideUser.id, thread2);
@@ -217,7 +217,7 @@ test.describe('Discord Bot Integration Tests', () => {
             let userThread = userThreads.get(buttonClicker.id);
             if (!userThread) {
                 userThread = await testChannel.threads.create({
-                    name: threadNames.getThreadName(buttonClicker.username),
+                    name: threadNames.getThreadName(buttonClicker),
                     ownerId: buttonClicker.id
                 });
                 userThreads.set(buttonClicker.id, userThread);
@@ -266,7 +266,7 @@ test.describe('Discord Bot Integration Tests', () => {
             
             // Create initial thread
             const thread1 = await testChannel.threads.create({
-                name: threadNames.getThreadName(buttonClicker.username),
+                name: threadNames.getThreadName(buttonClicker),
                 ownerId: buttonClicker.id
             });
             userThreads.set(buttonClicker.id, thread1);
@@ -287,7 +287,7 @@ test.describe('Discord Bot Integration Tests', () => {
             } catch (error) {
                 // Thread was deleted/archived, create new one
                 existingThread = await testChannel.threads.create({
-                    name: threadNames.getThreadName(buttonClicker.username),
+                    name: threadNames.getThreadName(buttonClicker),
                     ownerId: buttonClicker.id
                 });
                 userThreads.set(buttonClicker.id, existingThread);
