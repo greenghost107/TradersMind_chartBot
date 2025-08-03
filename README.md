@@ -78,7 +78,7 @@ ALPHA_VANTAGE_API_KEY=your_alpha_vantage_api_key_here
 
 # Optional Configuration
 MESSAGE_RETENTION_HOURS=26        # How long to keep bot messages before deletion (1-168 hours, default: 26)
-LOG_LEVEL=info                    # Logging level: debug, info, warn, error (default: info)
+LOG_LEVEL=debug                   # Logging level: debug, info, warn, error (default: debug in dev, warn in prod)
 CACHE_TTL_HOURS=24               # How long to cache stock data (default: 24 hours)
 ```
 

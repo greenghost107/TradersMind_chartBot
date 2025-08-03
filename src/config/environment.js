@@ -96,7 +96,7 @@ class Environment {
      * Get log level
      */
     getLogLevel() {
-        return process.env.LOG_LEVEL || (this.isDevelopment() ? 'debug' : 'info');
+        return process.env.LOG_LEVEL || (this.isDevelopment() ? 'debug' : 'warn');
     }
 
     /**
