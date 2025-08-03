@@ -170,7 +170,7 @@ class ChartService {
         const { EmbedBuilder } = require('discord.js');
         
         const embed = new EmbedBuilder()
-            .setTitle(`${stockData.symbol}`)
+            .setTitle(`${stockData.symbol} 1D`)
             .setDescription(`$${stockData.currentPrice} (${stockData.change >= 0 ? '+' : ''}${stockData.changePercent}%)`)
             .setColor(stockData.change >= 0 ? 0x00ff88 : 0xff4444)
             .setImage('attachment://chart.png');
