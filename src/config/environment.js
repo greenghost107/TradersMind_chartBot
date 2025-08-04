@@ -111,8 +111,8 @@ class Environment {
      * Get message retention hours
      */
     getMessageRetentionHours() {
-        const hours = parseInt(process.env.MESSAGE_RETENTION_HOURS);
-        if (isNaN(hours) || hours < 1 || hours > 168) { // Max 1 week
+        const hours = parseFloat(process.env.MESSAGE_RETENTION_HOURS);
+        if (isNaN(hours) || hours < 0.1 || hours > 168) { // Min 6 minutes, Max 1 week
             return 26; // Default 26 hours
         }
         return hours;

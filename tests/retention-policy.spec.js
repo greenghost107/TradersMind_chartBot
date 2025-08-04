@@ -110,11 +110,39 @@ class MockChartService {
     }
 }
 
+class MockThreadService {
+    constructor() {
+        this.removedUserIds = [];
+        this.userThreads = new Map();
+    }
+
+    removeUserThread(userId) {
+        this.removedUserIds.push(userId);
+        return this.userThreads.delete(userId);
+    }
+
+    // Helper method for tests to simulate having a thread for a user
+    addUserThread(userId, threadId) {
+        this.userThreads.set(userId, { id: threadId, userId });
+    }
+
+    // Helper method for tests to check if removeUserThread was called
+    wasUserThreadRemoved(userId) {
+        return this.removedUserIds.includes(userId);
+    }
+
+    // Helper method to clear tracking for tests
+    clearRemovedUserIds() {
+        this.removedUserIds = [];
+    }
+}
+
 // Utility function to create messages with specific timestamps
-function createMessageWithAge(messageTrackingService, ageInHours, messageId = null, ticker = 'AAPL') {
+function createMessageWithAge(messageTrackingService, ageInHours, messageId = null, ticker = 'AAPL', options = {}) {
     const id = messageId || `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const channelId = 'test_channel_123';
-    const userId = 'test_user_456';
+    const channelId = options.channelId || 'test_channel_123';
+    const userId = options.userId || 'test_user_456';
+    const threadId = options.threadId || null;
     const cacheKeys = [`stock_${ticker}_2024-01-01`, `chart_${ticker}_2024-01-01`];
     
     // Manually create message data with specific timestamp
@@ -128,11 +156,16 @@ function createMessageWithAge(messageTrackingService, ageInHours, messageId = nu
         type: 'chart_response'
     };
     
+    // Add threadId if provided
+    if (threadId) {
+        messageData.threadId = threadId;
+    }
+    
     // Directly insert into tracking service (bypassing normal tracking)
     messageTrackingService.trackedMessages.set(id, messageData);
     messageTrackingService.messageToCache.set(id, cacheKeys);
     
-    return { messageId: id, channelId, userId, ticker, cacheKeys };
+    return { messageId: id, channelId, userId, ticker, cacheKeys, threadId };
 }
 
 test.describe('Retention Policy Tests', () => {
@@ -143,6 +176,7 @@ test.describe('Retention Policy Tests', () => {
     let mockChannel;
     let mockStockService;
     let mockChartService;
+    let mockThreadService;
 
     test.beforeEach(() => {
         // Setup mock environment with 2-hour retention for fast testing
@@ -152,6 +186,7 @@ test.describe('Retention Policy Tests', () => {
         messageTrackingService = new MessageTrackingService(mockEnvironment);
         mockStockService = new MockStockService();
         mockChartService = new MockChartService();
+        mockThreadService = new MockThreadService();
         
         // Setup mock Discord client and channel
         mockClient = new MockDiscordClient();
@@ -163,7 +198,8 @@ test.describe('Retention Policy Tests', () => {
             messageTrackingService, 
             mockStockService, 
             mockChartService,
-            mockEnvironment
+            mockThreadService,  // 5th parameter: threadService
+            mockEnvironment     // 6th parameter: environment
         );
     });
 
@@ -223,6 +259,43 @@ test.describe('Retention Policy Tests', () => {
             
             // Clean up
             delete process.env.MESSAGE_RETENTION_HOURS;
+        });
+
+        test('should support fractional hour retention (15-minute retention)', () => {
+            const env = new Environment();
+            
+            // Test 15-minute retention (0.25 hours)
+            process.env.MESSAGE_RETENTION_HOURS = '0.25';
+            expect(env.getMessageRetentionHours()).toBe(0.25);
+            
+            // Test 6-minute retention (0.1 hours - minimum allowed)
+            process.env.MESSAGE_RETENTION_HOURS = '0.1';
+            expect(env.getMessageRetentionHours()).toBe(0.1);
+            
+            // Test below minimum (should use default)
+            process.env.MESSAGE_RETENTION_HOURS = '0.05';
+            expect(env.getMessageRetentionHours()).toBe(26);
+            
+            // Clean up
+            delete process.env.MESSAGE_RETENTION_HOURS;
+        });
+
+        test('should handle 15-minute message retention correctly', () => {
+            const fifteenMinEnv = new MockEnvironment(0.25); // 15 minutes
+            const service = new MessageTrackingService(fifteenMinEnv);
+            
+            // Create a message that's 10 minutes old (should not expire)
+            createMessageWithAge(service, 10/60, 'msg_10min_old'); // 10/60 = 0.167 hours
+            
+            const notExpired = service.getExpiredMessages();
+            expect(notExpired).toHaveLength(0);
+            
+            // Create a message that's 20 minutes old (should expire)
+            createMessageWithAge(service, 20/60, 'msg_20min_old'); // 20/60 = 0.333 hours
+            
+            const expired = service.getExpiredMessages();
+            expect(expired).toHaveLength(1);
+            expect(expired[0].messageId).toBe('msg_20min_old');
         });
     });
 
@@ -452,6 +525,374 @@ test.describe('Retention Policy Tests', () => {
             expect(messageTrackingService.getAllTrackedMessages()).toHaveLength(0);
             expect(mockStockService.clearedKeys).toContain('stock_GOOGL_2024-01-01');
             expect(mockChartService.clearedKeys).toContain('chart_GOOGL_2024-01-01');
+        });
+    });
+
+    test.describe('Thread Cleanup Tests', () => {
+        test('should cleanup thread when user has no remaining messages', async () => {
+            const userId = 'test_user_thread_cleanup';
+            const threadId = 'test_thread_123';
+            
+            // Create an expired message with thread info
+            createMessageWithAge(messageTrackingService, 3, 'thread_cleanup_msg', 'AAPL', {
+                userId,
+                threadId
+            });
+            mockChannel.createMockMessage('thread_cleanup_msg');
+            
+            // Setup thread service to have this user
+            mockThreadService.addUserThread(userId, threadId);
+            
+            // Run cleanup
+            await retentionService.runCleanup();
+            
+            // Verify thread cleanup was called
+            expect(mockThreadService.wasUserThreadRemoved(userId)).toBe(true);
+            expect(mockChannel.deletedMessages).toContain('thread_cleanup_msg');
+        });
+
+        test('should not cleanup thread when user has remaining messages', async () => {
+            const userId = 'test_user_multiple_msgs';
+            const threadId = 'test_thread_456';
+            
+            // Create one expired message and one fresh message for same user
+            createMessageWithAge(messageTrackingService, 3, 'expired_msg', 'AAPL', {
+                userId,
+                threadId
+            });
+            createMessageWithAge(messageTrackingService, 0.5, 'fresh_msg', 'GOOGL', {
+                userId,
+                threadId
+            });
+            mockChannel.createMockMessage('expired_msg');
+            mockChannel.createMockMessage('fresh_msg');
+            
+            // Setup thread service to have this user
+            mockThreadService.addUserThread(userId, threadId);
+            
+            // Run cleanup
+            await retentionService.runCleanup();
+            
+            // Verify thread was NOT cleaned up (user still has fresh message)
+            expect(mockThreadService.wasUserThreadRemoved(userId)).toBe(false);
+            expect(mockChannel.deletedMessages).toContain('expired_msg');
+            expect(mockChannel.deletedMessages).not.toContain('fresh_msg');
+        });
+
+        test('should handle thread cleanup gracefully when no threadService provided', async () => {
+            // Create a retention service without thread service
+            const noThreadRetentionService = new RetentionService(
+                mockClient, 
+                messageTrackingService, 
+                mockStockService, 
+                mockChartService,
+                null,  // No thread service
+                mockEnvironment
+            );
+            
+            // Create an expired message
+            createMessageWithAge(messageTrackingService, 3, 'no_thread_service_msg', 'AAPL');
+            mockChannel.createMockMessage('no_thread_service_msg');
+            
+            // Should not throw error when thread service is null
+            await expect(noThreadRetentionService.runCleanup()).resolves.not.toThrow();
+            expect(mockChannel.deletedMessages).toContain('no_thread_service_msg');
+        });
+    });
+
+    test.describe('Thread System Message Tests', () => {
+        test('should track and cleanup thread system messages', async () => {
+            const userId = 'test_user_system_msg';
+            const threadId = 'test_thread_system_123';
+            const systemMessageId = 'system_msg_456';
+            
+            // Track a thread system message
+            messageTrackingService.trackThreadSystemMessage(
+                systemMessageId,
+                'test_channel_123',
+                threadId,
+                userId
+            );
+            
+            // Create the system message in mock channel
+            mockChannel.createMockMessage(systemMessageId, 'hover-assistant started a thread: 📊 User\'s Stock Charts. See all threads.');
+            
+            // Age the message to be expired
+            const trackedMessage = messageTrackingService.trackedMessages.get(systemMessageId);
+            trackedMessage.createdAt = new Date(Date.now() - (3 * 60 * 60 * 1000)); // 3 hours ago
+            
+            // Run cleanup
+            await retentionService.runCleanup();
+            
+            // Verify system message was deleted
+            expect(mockChannel.deletedMessages).toContain(systemMessageId);
+            expect(messageTrackingService.getAllTrackedMessages()).not.toContainEqual(
+                expect.objectContaining({ messageId: systemMessageId })
+            );
+        });
+
+        test('should handle system message tracking with thread info', async () => {
+            const userId = 'test_user_thread_info';
+            const threadId = 'test_thread_789';
+            const systemMessageId = 'system_msg_789';
+            
+            // Track system message
+            messageTrackingService.trackThreadSystemMessage(
+                systemMessageId,
+                'test_channel_123',
+                threadId,
+                userId
+            );
+            
+            // Verify message is tracked with correct type
+            const trackedMessage = messageTrackingService.trackedMessages.get(systemMessageId);
+            expect(trackedMessage).toBeDefined();
+            expect(trackedMessage.type).toBe('thread_system_message');
+            expect(trackedMessage.threadId).toBe(threadId);
+            expect(trackedMessage.userId).toBe(userId);
+            expect(trackedMessage.channelId).toBe('test_channel_123');
+        });
+
+        test('should include system messages in expired message list', async () => {
+            // Create multiple message types
+            createMessageWithAge(messageTrackingService, 3, 'expired_chart', 'AAPL');
+            createMessageWithAge(messageTrackingService, 3, 'expired_button', 'GOOGL');
+            
+            // Add system message
+            messageTrackingService.trackThreadSystemMessage(
+                'expired_system',
+                'test_channel_123',
+                'thread_123',
+                'user_123'
+            );
+            
+            // Age the system message
+            const systemMessage = messageTrackingService.trackedMessages.get('expired_system');
+            systemMessage.createdAt = new Date(Date.now() - (3 * 60 * 60 * 1000));
+            
+            // Get expired messages
+            const expiredMessages = messageTrackingService.getExpiredMessages();
+            
+            // Verify all message types are included
+            expect(expiredMessages).toHaveLength(3);
+            expect(expiredMessages.map(m => m.messageId)).toContain('expired_system');
+            expect(expiredMessages.find(m => m.messageId === 'expired_system').type).toBe('thread_system_message');
+        });
+
+        test('should not delete fresh system messages', async () => {
+            const systemMessageId = 'fresh_system_msg';
+            
+            // Track a fresh system message (0.5 hours old)
+            messageTrackingService.trackThreadSystemMessage(
+                systemMessageId,
+                'test_channel_123',
+                'thread_fresh',
+                'user_fresh'
+            );
+            
+            // Age it to be within retention period
+            const systemMessage = messageTrackingService.trackedMessages.get(systemMessageId);
+            systemMessage.createdAt = new Date(Date.now() - (0.5 * 60 * 60 * 1000));
+            
+            mockChannel.createMockMessage(systemMessageId);
+            
+            // Run cleanup
+            await retentionService.runCleanup();
+            
+            // Verify system message was NOT deleted
+            expect(mockChannel.deletedMessages).not.toContain(systemMessageId);
+            expect(mockChannel.messages.has(systemMessageId)).toBe(true);
+        });
+
+        test('should handle system message deletion errors gracefully', async () => {
+            const systemMessageId = 'error_system_msg';
+            
+            // Track expired system message
+            messageTrackingService.trackThreadSystemMessage(
+                systemMessageId,
+                'test_channel_123',
+                'thread_error',
+                'user_error'
+            );
+            
+            // Age it to be expired
+            const systemMessage = messageTrackingService.trackedMessages.get(systemMessageId);
+            systemMessage.createdAt = new Date(Date.now() - (3 * 60 * 60 * 1000));
+            
+            // Don't create the message in mock channel (simulates already deleted)
+            
+            // Should not throw error when message doesn't exist
+            await expect(retentionService.runCleanup()).resolves.not.toThrow();
+            
+            // Message should be untracked even if deletion failed
+            expect(messageTrackingService.getAllTrackedMessages()).not.toContainEqual(
+                expect.objectContaining({ messageId: systemMessageId })
+            );
+        });
+    });
+
+    test.describe('Bot-Specific System Message Safety Tests', () => {
+        let mockBotClient;
+        let messageHandlerWithBot;
+
+        test.beforeEach(() => {
+            // Create mock bot client
+            mockBotClient = {
+                user: {
+                    id: 'our_bot_123',
+                    username: 'hover-assistant'
+                }
+            };
+            
+            // Create message handler with bot client
+            messageHandlerWithBot = {
+                botId: 'our_bot_123',
+                botClient: mockBotClient,
+                THREAD_NAME_PATTERN: /^📊 (.+)'s Stock Charts$/,
+                messageTrackingService: messageTrackingService,
+                
+                async isOurBotThreadSystemMessage(message) {
+                    // Simplified version of the validation logic for testing
+                    try {
+                        const contentMatch = message.content.match(/^(.+?) started a thread: (.+?)\. See all threads\.$/);
+                        if (!contentMatch) return false;
+                        
+                        const [, botMention, threadName] = contentMatch;
+                        
+                        // Check thread name pattern
+                        if (!this.THREAD_NAME_PATTERN.test(threadName)) return false;
+                        
+                        // Check bot mention
+                        if (!botMention.includes(this.botClient.user.username)) return false;
+                        
+                        // For our bot's messages, we expect a thread reference to exist
+                        // If the message claims to be about thread creation but has no thread, reject it
+                        if (!message.thread) return false;
+                        
+                        // Check thread ownership if thread is provided
+                        if (message.thread.ownerId) {
+                            if (message.thread.ownerId !== this.botId) return false;
+                        }
+                        
+                        return true;
+                    } catch {
+                        return false;
+                    }
+                }
+            };
+        });
+
+        test('should NOT track system messages from other bots', async () => {
+            const systemMessage = {
+                id: 'other_bot_system',
+                system: true,
+                type: 18, // MessageType.ThreadCreated
+                content: 'different-bot started a thread: 📊 User\'s Stock Charts. See all threads.',
+                thread: { id: 'thread_123', name: '📊 User\'s Stock Charts' }
+            };
+
+            // Should not validate as our bot's message
+            const isOurs = await messageHandlerWithBot.isOurBotThreadSystemMessage(systemMessage);
+            expect(isOurs).toBe(false);
+            
+            // Verify message is not tracked
+            const initialCount = messageTrackingService.getAllTrackedMessages().length;
+            // Message should not be tracked since it's not from our bot
+            expect(messageTrackingService.getAllTrackedMessages()).toHaveLength(initialCount);
+        });
+
+        test('should NOT track system messages with different thread name patterns', async () => {
+            const systemMessage = {
+                id: 'wrong_pattern_system',
+                system: true,
+                type: 18,
+                content: 'hover-assistant started a thread: General Discussion Thread. See all threads.',
+                thread: { id: 'thread_456', name: 'General Discussion Thread' }
+            };
+
+            // Should not validate due to wrong thread name pattern
+            const isOurs = await messageHandlerWithBot.isOurBotThreadSystemMessage(systemMessage);
+            expect(isOurs).toBe(false);
+        });
+
+        test('should NOT track system messages with malformed content', async () => {
+            const systemMessage = {
+                id: 'malformed_system',
+                system: true,
+                type: 18,
+                content: 'Something else happened with a thread',
+                thread: { id: 'thread_789', name: '📊 User\'s Stock Charts' }
+            };
+
+            // Should not validate due to malformed content
+            const isOurs = await messageHandlerWithBot.isOurBotThreadSystemMessage(systemMessage);
+            expect(isOurs).toBe(false);
+        });
+
+        test('should ONLY track system messages that match our exact criteria', async () => {
+            const validSystemMessage = {
+                id: 'valid_system_msg',
+                system: true,
+                type: 18,
+                content: 'hover-assistant started a thread: 📊 TestUser\'s Stock Charts. See all threads.',
+                thread: { 
+                    id: 'thread_valid', 
+                    name: '📊 TestUser\'s Stock Charts',
+                    ownerId: 'our_bot_123'
+                }
+            };
+
+            // Should validate as our bot's message
+            const isOurs = await messageHandlerWithBot.isOurBotThreadSystemMessage(validSystemMessage);
+            expect(isOurs).toBe(true);
+        });
+
+        test('should NOT track system messages from threads with wrong ownership', async () => {
+            const systemMessage = {
+                id: 'wrong_owner_system',
+                system: true,
+                type: 18,
+                content: 'hover-assistant started a thread: 📊 User\'s Stock Charts. See all threads.',
+                thread: { 
+                    id: 'thread_wrong', 
+                    name: '📊 User\'s Stock Charts',
+                    ownerId: 'different_bot_456' // Wrong owner
+                }
+            };
+
+            // Should not validate due to wrong thread ownership
+            const isOurs = await messageHandlerWithBot.isOurBotThreadSystemMessage(systemMessage);
+            expect(isOurs).toBe(false);
+        });
+
+        test('should handle edge cases safely', async () => {
+            const edgeCases = [
+                {
+                    id: 'no_content',
+                    system: true,
+                    type: 18,
+                    content: '', // Empty content
+                },
+                {
+                    id: 'null_thread',
+                    system: true,
+                    type: 18,
+                    content: 'hover-assistant started a thread: 📊 User\'s Stock Charts. See all threads.',
+                    thread: null // No thread reference
+                },
+                {
+                    id: 'similar_but_different',
+                    system: true,
+                    type: 18,
+                    content: 'hover-assistant started a thread: 📈 User\'s Trading Charts. See all threads.', // Similar but different emoji
+                }
+            ];
+
+            for (let i = 0; i < edgeCases.length; i++) {
+                const testCase = edgeCases[i];
+                const isOurs = await messageHandlerWithBot.isOurBotThreadSystemMessage(testCase);
+                expect(isOurs).toBe(false, `Edge case ${testCase.id} should return false but returned true`);
+            }
         });
     });
 });

@@ -5,11 +5,12 @@
 const { logger } = require('../utils/logger');
 
 class RetentionService {
-    constructor(client, messageTrackingService, stockService, chartService, environment = null) {
+    constructor(client, messageTrackingService, stockService, chartService, threadService = null, environment = null) {
         this.client = client;
         this.messageTrackingService = messageTrackingService;
         this.stockService = stockService;
         this.chartService = chartService;
+        this.threadService = threadService;
         this.environment = environment;
         this.cleanupInterval = null;
         this.isRunning = false;
@@ -117,7 +118,7 @@ class RetentionService {
      * @param {Object} messageData - Message data from tracking service
      */
     async deleteMessageAndCleanup(messageData) {
-        const { messageId, channelId, cacheKeys } = messageData;
+        const { messageId, channelId, cacheKeys, userId, threadId } = messageData;
 
         try {
             // Get the Discord channel
@@ -130,6 +131,7 @@ class RetentionService {
                 });
                 // Still clean up cache and tracking
                 await this.cleanupCacheData(messageData);
+                await this.cleanupThreadIfNeeded(messageData);
                 this.messageTrackingService.untrackMessage(messageId);
                 return;
             }
@@ -141,7 +143,8 @@ class RetentionService {
                 
                 logger.debug('Message deleted successfully', {
                     messageId,
-                    channelId
+                    channelId,
+                    messageType: messageData.type
                 });
             } catch (messageError) {
                 // Message might already be deleted or bot lacks permissions
@@ -159,6 +162,9 @@ class RetentionService {
 
             // Clean up associated cache data
             await this.cleanupCacheData(messageData);
+
+            // Clean up thread if this was the user's thread
+            await this.cleanupThreadIfNeeded(messageData);
 
             // Remove from tracking
             this.messageTrackingService.untrackMessage(messageId);
@@ -221,6 +227,67 @@ class RetentionService {
             logger.error('Error during cache cleanup', {
                 ticker,
                 cacheKeys: cacheKeys.length,
+                error: error.message
+            });
+        }
+    }
+
+    /**
+     * Clean up thread if needed based on message data
+     * @param {Object} messageData - Message data containing thread information
+     */
+    async cleanupThreadIfNeeded(messageData) {
+        const { userId, threadId, channelId } = messageData;
+
+        if (!this.threadService || !userId) {
+            return;
+        }
+
+        try {
+            // Check if this user has any remaining tracked messages
+            const allTrackedMessages = this.messageTrackingService.getAllTrackedMessages();
+            const userMessages = allTrackedMessages.filter(msg => msg.userId === userId);
+
+            if (userMessages.length <= 1) { // Only this message (or none left)
+                // Remove user thread from tracking
+                this.threadService.removeUserThread(userId);
+
+                // Try to delete/archive the actual thread if we have threadId
+                if (threadId) {
+                    try {
+                        const thread = await this.client.channels.fetch(threadId);
+                        if (thread && thread.isThread()) {
+                            await thread.delete();
+                            logger.debug('Thread deleted successfully', {
+                                threadId,
+                                userId
+                            });
+                        }
+                    } catch (threadError) {
+                        if (threadError.code === 10008) { // Unknown Channel (thread already deleted)
+                            logger.debug('Thread already deleted', { threadId });
+                        } else if (threadError.code === 50013) { // Missing Permissions
+                            logger.warn('Missing permissions to delete thread', {
+                                threadId,
+                                userId
+                            });
+                        } else {
+                            logger.warn('Failed to delete thread', {
+                                threadId,
+                                userId,
+                                error: threadError.message
+                            });
+                        }
+                    }
+                }
+
+                logger.debug('Thread cleanup completed', { userId, threadId });
+            }
+
+        } catch (error) {
+            logger.error('Error during thread cleanup', {
+                userId,
+                threadId,
                 error: error.message
             });
         }

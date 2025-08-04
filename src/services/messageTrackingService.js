@@ -18,13 +18,15 @@ class MessageTrackingService {
      * @param {string} userId - User who triggered the message
      * @param {string} ticker - Stock ticker associated with the message
      * @param {Array} cacheKeys - Cache keys to clean up when message is deleted
+     * @param {string} threadId - Thread ID if message was sent to a thread
      */
-    trackMessage(messageId, channelId, userId, ticker, cacheKeys = []) {
+    trackMessage(messageId, channelId, userId, ticker, cacheKeys = [], threadId = null) {
         const messageData = {
             messageId,
             channelId,
             userId,
             ticker,
+            threadId,
             createdAt: new Date(),
             cacheKeys,
             type: 'chart_response'
@@ -71,6 +73,34 @@ class MessageTrackingService {
             messageId,
             channelId,
             tickers
+        });
+    }
+
+    /**
+     * Track a thread system message created by Discord
+     * @param {string} messageId - Discord message ID
+     * @param {string} channelId - Discord channel ID
+     * @param {string} threadId - Thread ID that was created
+     * @param {string} userId - User who created the thread
+     */
+    trackThreadSystemMessage(messageId, channelId, threadId, userId) {
+        const messageData = {
+            messageId,
+            channelId,
+            threadId,
+            userId,
+            createdAt: new Date(),
+            cacheKeys: [],
+            type: 'thread_system_message'
+        };
+
+        this.trackedMessages.set(messageId, messageData);
+        
+        logger.debug('Thread system message tracked for retention', {
+            messageId,
+            channelId,
+            threadId,
+            userId
         });
     }
 

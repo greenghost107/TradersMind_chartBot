@@ -39,24 +39,24 @@ class TradersMindsBot {
             // Initialize error handler first
             this.handlers.error = new ErrorHandler();
             
+            // Initialize Discord client first so we can pass it to services
+            this.discordConfig = new DiscordConfig(this.environment);
+            this.client = this.discordConfig.createClient();
+            
             // Initialize services
             this.services.stock = new StockService();
             this.services.messageTracking = new MessageTrackingService(this.environment);
             this.services.chart = new ChartService(this.services.stock, this.services.messageTracking);
-            this.services.thread = new ThreadService();
+            this.services.thread = new ThreadService(this.client);
             
-            // Initialize handlers with message tracking
-            this.handlers.message = new MessageHandler(this.services.messageTracking);
+            // Initialize handlers with message tracking and bot client
+            this.handlers.message = new MessageHandler(this.services.messageTracking, this.client);
             this.handlers.interaction = new InteractionHandler(
                 this.services.stock,
                 this.services.chart,
                 this.services.thread,
                 this.services.messageTracking
             );
-            
-            // Initialize Discord client
-            this.discordConfig = new DiscordConfig(this.environment);
-            this.client = this.discordConfig.createClient();
             
             // Setup event listeners
             this.setupEventListeners();
@@ -67,6 +67,7 @@ class TradersMindsBot {
                 this.services.messageTracking,
                 this.services.stock,
                 this.services.chart,
+                this.services.thread,
                 this.environment
             );
             
@@ -138,10 +139,10 @@ class TradersMindsBot {
             this.logStats();
         }, 7200000);
 
-        // Health check every minute
+        // Health check every hour
         setInterval(() => {
             this.healthCheck();
-        }, 60000);
+        }, 3600000);
         
         // Chart cache cleanup every hour
         setInterval(() => {

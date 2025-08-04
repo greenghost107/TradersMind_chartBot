@@ -15,7 +15,7 @@ class ChartService {
     /**
      * Generate stock chart using Puppeteer and Chart.js
      */
-    async generateChart(stockData, messageId = null, channelId = null, userId = null) {
+    async generateChart(stockData, messageId = null, channelId = null, userId = null, threadId = null) {
         // Check if chart is already cached
         const cacheKey = this.getChartCacheKey(stockData.symbol);
         const cachedChart = this.getFromCache(cacheKey);
@@ -29,7 +29,8 @@ class ChartService {
                     channelId, 
                     userId, 
                     stockData.symbol, 
-                    [cacheKey]
+                    [cacheKey],
+                    threadId
                 );
             }
             
@@ -77,7 +78,8 @@ class ChartService {
                     channelId, 
                     userId, 
                     stockData.symbol, 
-                    [cacheKey]
+                    [cacheKey],
+                    threadId
                 );
             }
             
