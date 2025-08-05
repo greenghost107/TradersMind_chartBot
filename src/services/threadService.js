@@ -6,10 +6,17 @@ class ThreadService {
     constructor(botClient = null) {
         this.userThreads = new Map();
         this.botClient = botClient;
-        this.botId = botClient?.user?.id || null;
         
         // Our bot's specific thread name pattern
         this.THREAD_NAME_PATTERN = /^📊 (.+)'s Stock Charts$/;
+    }
+
+    /**
+     * Get the current bot ID (lazy initialization)
+     * @returns {string|null} Bot user ID if available
+     */
+    getBotId() {
+        return this.botClient?.user?.id || null;
     }
 
     /**
@@ -55,11 +62,24 @@ class ThreadService {
             console.warn(`⚠️ Could not find system message for thread ${thread.id}:`, error.message);
         }
         
-        // Auto-cleanup thread reference after 1 hour
+        // Auto-cleanup thread reference after 1 hour (but only if no pending messages)
         setTimeout(() => {
+            // Only remove if the thread has been archived/inactive
             if (this.userThreads.has(userId)) {
-                this.userThreads.delete(userId);
-                console.log(`⏰ Auto-removed thread reference for user ${userId} after 1 hour`);
+                const thread = this.userThreads.get(userId);
+                try {
+                    // Keep reference if thread is still active (not archived)
+                    if (thread.archived) {
+                        this.userThreads.delete(userId);
+                        console.log(`⏰ Auto-removed archived thread reference for user ${userId} after 1 hour`);
+                    } else {
+                        console.log(`⏰ Keeping active thread reference for user ${userId} - thread not yet archived`);
+                    }
+                } catch (error) {
+                    // If we can't access the thread, remove the reference
+                    this.userThreads.delete(userId);
+                    console.log(`⏰ Auto-removed stale thread reference for user ${userId} after 1 hour (error: ${error.message})`);
+                }
             }
         }, 3600000); // 1 hour
         
@@ -83,6 +103,28 @@ class ThreadService {
      */
     removeUserThread(userId) {
         this.userThreads.delete(userId);
+    }
+
+    /**
+     * Check if user has pending tracked messages before removing thread reference
+     * @param {string} userId - User ID to check
+     * @param {Function} hasUserMessagesCallback - Function that returns true if user has tracked messages
+     * @returns {boolean} - True if thread reference was removed
+     */
+    removeUserThreadIfSafe(userId, hasUserMessagesCallback) {
+        if (!this.userThreads.has(userId)) {
+            return false;
+        }
+
+        // Check if user has pending messages
+        if (hasUserMessagesCallback && hasUserMessagesCallback(userId)) {
+            console.log(`🔒 Keeping thread reference for user ${userId} - has pending tracked messages`);
+            return false;
+        }
+
+        this.userThreads.delete(userId);
+        console.log(`🧹 Safely removed thread reference for user ${userId} - no pending messages`);
+        return true;
     }
 
     /**
@@ -221,8 +263,9 @@ class ThreadService {
     async findThreadSystemMessage(channel, thread) {
         try {
             // Ensure we have bot info for validation
-            if (!this.botId || !this.botClient?.user) {
-                console.warn('Bot client not available for thread system message validation');
+            const botId = this.getBotId();
+            if (!botId || !this.botClient?.user) {
+                console.warn('Bot client not yet logged in, skipping thread system message search');
                 return null;
             }
 
@@ -290,7 +333,8 @@ class ThreadService {
                     return false;
                 }
                 
-                if (message.thread.ownerId && message.thread.ownerId !== this.botId) {
+                const botId = this.getBotId();
+                if (message.thread.ownerId && message.thread.ownerId !== botId) {
                     return false;
                 }
             }

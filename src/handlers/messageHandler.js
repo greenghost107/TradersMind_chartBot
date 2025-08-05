@@ -10,10 +10,17 @@ class MessageHandler {
     constructor(messageTrackingService = null, botClient = null) {
         this.messageTrackingService = messageTrackingService;
         this.botClient = botClient;
-        this.botId = botClient?.user?.id || null;
         
         // Our bot's specific thread name pattern
         this.THREAD_NAME_PATTERN = /^📊 (.+)'s Stock Charts$/;
+    }
+
+    /**
+     * Get the current bot ID (lazy initialization)
+     * @returns {string|null} Bot user ID if available
+     */
+    getBotId() {
+        return this.botClient?.user?.id || null;
     }
 
     /**
@@ -77,8 +84,9 @@ class MessageHandler {
     async isOurBotThreadSystemMessage(message) {
         try {
             // First, check if we have a bot ID to validate against
-            if (!this.botId) {
-                logger.warn('Bot ID not available for system message validation');
+            const botId = this.getBotId();
+            if (!botId) {
+                logger.debug('Bot client not yet logged in, skipping system message validation');
                 return false;
             }
 
@@ -115,10 +123,10 @@ class MessageHandler {
             
             // Check if our bot is the thread owner/creator
             const thread = message.thread;
-            if (thread.ownerId && thread.ownerId !== this.botId) {
+            if (thread.ownerId && thread.ownerId !== botId) {
                 logger.debug('Thread not owned by our bot', {
                     threadOwnerId: thread.ownerId,
-                    ourBotId: this.botId
+                    ourBotId: botId
                 });
                 return false;
             }

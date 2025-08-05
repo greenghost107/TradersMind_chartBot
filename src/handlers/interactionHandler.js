@@ -6,10 +6,9 @@ const { EmbedBuilder } = require('discord.js');
 const { logger } = require('../utils/logger');
 
 class InteractionHandler {
-    constructor(stockService, chartService, threadService, messageTrackingService = null) {
+    constructor(stockService, chartService, messageTrackingService = null) {
         this.stockService = stockService;
         this.chartService = chartService;
-        this.threadService = threadService;
         this.messageTrackingService = messageTrackingService;
     }
 
@@ -52,65 +51,29 @@ class InteractionHandler {
             await interaction.deferReply({ ephemeral: true });
             replyDeferred = true;
             
-            // Get the channel from interaction (could be main channel or thread)
-            const channel = interaction.channel.isThread() ? 
-                interaction.channel.parent : interaction.channel;
-            
-            // Get or create user's dedicated thread
-            const threadResult = await this.threadService.getOrCreateUserThread(channel, interaction.user);
-            const userThread = threadResult.thread || threadResult;
-            
-            // Track system message if a new thread was created by our bot
-            if (threadResult.systemMessageId && threadResult.isNewThread && this.messageTrackingService) {
-                // Additional safety check: only track if we actually created the thread
-                if (threadResult.isNewThread) {
-                    this.messageTrackingService.trackThreadSystemMessage(
-                        threadResult.systemMessageId,
-                        channel.id,
-                        userThread.id,
-                        interaction.user.id
-                    );
-                    
-                    logger.debug('Thread system message tracked for new bot-created thread', {
-                        systemMessageId: threadResult.systemMessageId,
-                        threadId: userThread.id,
-                        userId: interaction.user.id,
-                        wasNewThread: threadResult.isNewThread
-                    });
-                } else {
-                    logger.debug('Skipping system message tracking for existing thread', {
-                        threadId: userThread.id,
-                        userId: interaction.user.id
-                    });
-                }
-            }
-            
-            logger.debug('Thread acquired for user', {
+            logger.debug('Processing ephemeral chart request', {
                 user: interaction.user.username,
                 userId: interaction.user.id,
-                threadId: userThread.id,
-                threadName: userThread.name,
                 ticker,
-                wasNewThread: !!threadResult.systemMessageId
+                channelId: interaction.channel.id
             });
             
             // Fetch stock data
             const stockData = await this.stockService.fetchStockData(ticker);
             
-            // Generate chart with message tracking
+            // Generate chart for ephemeral response
             const chartBuffer = await this.chartService.generateChart(
                 stockData, 
                 null, // messageId will be set after sending
-                userThread.id, 
-                interaction.user.id,
-                userThread.id // threadId
+                interaction.channel.id, // use channel instead of thread
+                interaction.user.id
             );
             
             // Create embed
             const embed = this.chartService.createStockEmbed(stockData);
 
-            // Send chart to user's thread
-            const chartMessage = await userThread.send({
+            // Send chart as ephemeral response (only visible to requesting user)
+            const chartMessage = await interaction.editReply({
                 embeds: [embed],
                 files: [{
                     attachment: chartBuffer,
@@ -118,54 +81,36 @@ class InteractionHandler {
                 }]
             });
             
-            // Track the message for retention if tracking service is available
+            // Track the ephemeral message for retention if tracking service is available
             if (this.messageTrackingService) {
                 const cacheKey = this.chartService.getChartCacheKey(ticker);
                 this.messageTrackingService.trackMessage(
                     chartMessage.id,
-                    userThread.id,
+                    interaction.channel.id,
                     interaction.user.id,
                     ticker,
                     [cacheKey],
-                    userThread.id
+                    null, // no threadId for ephemeral responses
+                    true  // isEphemeral = true
                 );
             }
             
-            logger.success('Chart sent to user thread', { 
+            logger.success('Chart sent as ephemeral response', { 
                 user: interaction.user.username,
                 ticker,
-                threadId: userThread.id,
+                channelId: interaction.channel.id,
                 messageId: chartMessage.id
             });
             
-            // Delete the deferred reply to avoid showing any message
-            if (replyDeferred) {
-                await interaction.deleteReply();
-            }
-            
         } catch (error) {
-            logger.error('Error handling interaction', {
+            logger.error('Error handling ephemeral interaction', {
                 ticker,
                 user: interaction.user.username,
                 error: error.message,
                 replyDeferred
             });
             
-            // Clean up thread if it was created but interaction failed
-            if (this.threadService && interaction.user) {
-                try {
-                    await this.threadService.cleanupThreadOnError(
-                        interaction.user.id, 
-                        `Interaction error: ${error.message}`
-                    );
-                } catch (cleanupError) {
-                    logger.warn('Failed to cleanup thread after error', {
-                        error: cleanupError.message
-                    });
-                }
-            }
-            
-            // Send error message to user only if reply was deferred
+            // Send error message as ephemeral response
             if (replyDeferred) {
                 const errorEmbed = new EmbedBuilder()
                     .setTitle(`❌ Error: ${ticker}`)
@@ -175,7 +120,7 @@ class InteractionHandler {
                 try {
                     await interaction.editReply({ embeds: [errorEmbed] });
                 } catch (replyError) {
-                    logger.error('Error sending error message', {
+                    logger.error('Error sending ephemeral error message', {
                         ticker,
                         error: replyError.message
                     });
@@ -194,7 +139,7 @@ class InteractionHandler {
                         await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
                     }
                 } catch (replyError) {
-                    logger.error('Error sending fallback error message', {
+                    logger.error('Error sending fallback ephemeral error message', {
                         ticker,
                         error: replyError.message
                     });

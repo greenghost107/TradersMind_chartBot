@@ -7,7 +7,6 @@ const Environment = require('./config/environment');
 const DiscordConfig = require('./config/discord');
 const StockService = require('./services/stockService');
 const ChartService = require('./services/chartService');
-const ThreadService = require('./services/threadService');
 const MessageTrackingService = require('./services/messageTrackingService');
 const RetentionService = require('./services/retentionService');
 const MessageHandler = require('./handlers/messageHandler');
@@ -47,14 +46,12 @@ class TradersMindsBot {
             this.services.stock = new StockService();
             this.services.messageTracking = new MessageTrackingService(this.environment);
             this.services.chart = new ChartService(this.services.stock, this.services.messageTracking);
-            this.services.thread = new ThreadService(this.client);
             
             // Initialize handlers with message tracking and bot client
             this.handlers.message = new MessageHandler(this.services.messageTracking, this.client);
             this.handlers.interaction = new InteractionHandler(
                 this.services.stock,
                 this.services.chart,
-                this.services.thread,
                 this.services.messageTracking
             );
             
@@ -67,7 +64,7 @@ class TradersMindsBot {
                 this.services.messageTracking,
                 this.services.stock,
                 this.services.chart,
-                this.services.thread,
+                null, // threadService no longer needed
                 this.environment
             );
             
@@ -159,7 +156,7 @@ class TradersMindsBot {
         try {
             const discordStats = this.discordConfig.getStats();
             const errorStats = this.handlers.error.getErrorStats();
-            const threadCount = this.services.thread.getActiveThreadCount();
+            // Thread service no longer used with ephemeral responses
             const retentionStats = this.services.retention ? this.services.retention.getStatus() : null;
             const stockCacheStats = this.services.stock ? this.services.stock.getCacheStats() : null;
             const chartCacheStats = this.services.chart ? this.services.chart.getCacheStats() : null;
@@ -265,10 +262,7 @@ class TradersMindsBot {
                 this.services.retention.stop();
             }
             
-            // Cleanup services
-            if (this.services.thread) {
-                this.services.thread.cleanupExpiredThreads();
-            }
+            // Cleanup services (thread cleanup no longer needed with ephemeral responses)
             
             if (this.services.stock) {
                 this.services.stock.cleanupExpiredCache();
@@ -298,7 +292,7 @@ class TradersMindsBot {
             running: this.isRunning,
             discord: this.discordConfig ? this.discordConfig.getStats() : null,
             errors: this.handlers.error ? this.handlers.error.getErrorStats() : null,
-            threads: this.services.thread ? this.services.thread.getActiveThreadCount() : 0,
+            // threads: thread service removed (using ephemeral responses now),
             retention: this.services.retention ? this.services.retention.getStatus() : null,
             stockCache: this.services.stock ? this.services.stock.getCacheStats() : null,
             chartCache: this.services.chart ? this.services.chart.getCacheStats() : null

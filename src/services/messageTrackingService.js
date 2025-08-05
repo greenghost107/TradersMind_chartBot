@@ -19,8 +19,9 @@ class MessageTrackingService {
      * @param {string} ticker - Stock ticker associated with the message
      * @param {Array} cacheKeys - Cache keys to clean up when message is deleted
      * @param {string} threadId - Thread ID if message was sent to a thread
+     * @param {boolean} isEphemeral - Whether this is an ephemeral response
      */
-    trackMessage(messageId, channelId, userId, ticker, cacheKeys = [], threadId = null) {
+    trackMessage(messageId, channelId, userId, ticker, cacheKeys = [], threadId = null, isEphemeral = false) {
         const messageData = {
             messageId,
             channelId,
@@ -29,7 +30,8 @@ class MessageTrackingService {
             threadId,
             createdAt: new Date(),
             cacheKeys,
-            type: 'chart_response'
+            type: 'chart_response',
+            isEphemeral
         };
 
         this.trackedMessages.set(messageId, messageData);
@@ -181,14 +183,25 @@ class MessageTrackingService {
             .reduce((total, keys) => total + keys.length, 0);
         
         const messageTypes = {};
+        let ephemeralCount = 0;
+        let regularCount = 0;
+        
         for (const messageData of this.trackedMessages.values()) {
             messageTypes[messageData.type] = (messageTypes[messageData.type] || 0) + 1;
+            
+            if (messageData.isEphemeral) {
+                ephemeralCount++;
+            } else {
+                regularCount++;
+            }
         }
         
         return {
             totalMessages,
             totalCacheEntries,
-            messageTypes
+            messageTypes,
+            ephemeralMessages: ephemeralCount,
+            regularMessages: regularCount
         };
     }
 
