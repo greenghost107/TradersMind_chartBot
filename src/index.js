@@ -163,7 +163,6 @@ class TradersMindsBot {
             
             logger.info('Bot Statistics', {
                 guilds: discordStats.guilds,
-                activeThreads: threadCount,
                 recentErrors: errorStats.recentErrors,
                 uptimeMinutes: Math.floor(discordStats.uptime / 1000 / 60),
                 ping: discordStats.ping,
