@@ -46,5 +46,16 @@ module.exports = defineConfig({
         // Yahoo Finance fallback tests
       },
     },
+    {
+      name: 'chart-tests',
+      testMatch: '**/candlestick-chart.spec.js',
+      use: {
+        // Chart generation tests (require browser context)
+        headless: false, // Show browser for visual validation
+        viewport: { width: 1280, height: 720 },
+        ignoreHTTPSErrors: true,
+        video: 'retain-on-failure'
+      },
+    },
   ],
 });

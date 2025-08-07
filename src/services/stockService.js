@@ -149,7 +149,10 @@ class StockService {
         }
 
         const dates = Object.keys(timeSeries).slice(0, 30).reverse();
-        const prices = dates.map(date => parseFloat(timeSeries[date]['4. close']));
+        const opens = dates.map(date => parseFloat(timeSeries[date]['1. open']));
+        const highs = dates.map(date => parseFloat(timeSeries[date]['2. high']));
+        const lows = dates.map(date => parseFloat(timeSeries[date]['3. low']));
+        const closes = dates.map(date => parseFloat(timeSeries[date]['4. close']));
         const volumes = dates.map(date => parseInt(timeSeries[date]['5. volume']));
         
         const latestDate = Object.keys(timeSeries)[0];
@@ -165,7 +168,11 @@ class StockService {
             change: change.toFixed(2),
             changePercent,
             dates,
-            prices,
+            opens,
+            highs,
+            lows,
+            closes,
+            prices: closes, // Keep for backwards compatibility
             volumes,
             company: metaData['2. Symbol'],
             source: 'alphavantage'

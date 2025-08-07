@@ -71,14 +71,17 @@ class YahooFinanceService {
             throw new Error('Insufficient historical data');
         }
         
-        // Extract dates and prices
+        // Extract dates and OHLC data
         const dates = sortedData.map(day => day.date.toISOString().split('T')[0]);
-        const prices = sortedData.map(day => parseFloat(day.close));
+        const opens = sortedData.map(day => parseFloat(day.open));
+        const highs = sortedData.map(day => parseFloat(day.high));
+        const lows = sortedData.map(day => parseFloat(day.low));
+        const closes = sortedData.map(day => parseFloat(day.close));
         const volumes = sortedData.map(day => parseInt(day.volume) || 0);
         
         // Calculate current price and change
-        const currentPrice = quote.regularMarketPrice || quote.price || prices[prices.length - 1];
-        const previousPrice = prices[prices.length - 2];
+        const currentPrice = quote.regularMarketPrice || quote.price || closes[closes.length - 1];
+        const previousPrice = closes[closes.length - 2];
         const change = currentPrice - previousPrice;
         const changePercent = ((change / previousPrice) * 100).toFixed(2);
         
@@ -88,7 +91,11 @@ class YahooFinanceService {
             change: change.toFixed(2),
             changePercent,
             dates,
-            prices,
+            opens,
+            highs,
+            lows,
+            closes,
+            prices: closes, // Keep for backwards compatibility
             volumes,
             company: quote.shortName || quote.longName || ticker,
             source: 'yahoo' // Mark data source for debugging

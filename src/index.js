@@ -52,7 +52,8 @@ class TradersMindsBot {
             this.handlers.interaction = new InteractionHandler(
                 this.services.stock,
                 this.services.chart,
-                this.services.messageTracking
+                this.services.messageTracking,
+                this.client
             );
             
             // Setup event listeners
