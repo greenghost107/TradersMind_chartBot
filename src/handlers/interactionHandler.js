@@ -16,6 +16,16 @@ class InteractionHandler {
      * Handle button interaction
      */
     async handleInteraction(interaction) {
+        // Log all interactions for debugging
+        logger.debug('Received interaction', {
+            type: interaction.type,
+            customId: interaction.customId || 'N/A',
+            user: interaction.user.username,
+            isButton: interaction.isButton(),
+            isStringSelectMenu: interaction.isStringSelectMenu(),
+            isCommand: interaction.isCommand()
+        });
+
         // Only handle button interactions
         if (!interaction.isButton()) {
             logger.debug('Ignoring non-button interaction', {
@@ -30,6 +40,21 @@ class InteractionHandler {
             logger.debug('Ignoring non-stock interaction', {
                 customId: interaction.customId
             });
+            
+            // Send unknown interaction response
+            try {
+                if (!interaction.replied && !interaction.deferred) {
+                    await interaction.reply({ 
+                        content: '❌ Unknown interaction. This button is not supported.', 
+                        ephemeral: true 
+                    });
+                }
+            } catch (error) {
+                logger.error('Error responding to unknown interaction', {
+                    error: error.message,
+                    customId: interaction.customId
+                });
+            }
             return;
         }
 

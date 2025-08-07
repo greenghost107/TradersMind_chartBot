@@ -19,7 +19,9 @@ class DiscordConfig {
                 intents: [
                     GatewayIntentBits.Guilds,
                     GatewayIntentBits.GuildMessages,
-                    GatewayIntentBits.MessageContent
+                    GatewayIntentBits.MessageContent,
+                    GatewayIntentBits.DirectMessageReactions,
+                    GatewayIntentBits.GuildMessageReactions
                 ]
             });
 
