@@ -252,7 +252,7 @@ class ChartService {
                 body { 
                     margin: 0; 
                     padding: 20px; 
-                    background: white; 
+                    background: black; 
                     font-family: Arial, sans-serif;
                 }
                 #chart { 
@@ -306,27 +306,29 @@ class ChartService {
                         type: 'date',
                         tickformat: '%b %d',
                         showgrid: true,
-                        gridcolor: 'rgba(128, 128, 128, 0.2)'
+                        gridcolor: 'rgba(255, 255, 255, 0.2)',
+                        tickfont: { color: '#ffffff' }
                     },
                     yaxis: {
                         title: {
                             text: 'Price ($)',
-                            font: { size: 12 }
+                            font: { size: 12, color: '#ffffff' }
                         },
                         tickformat: '$.2f',
                         fixedrange: false,
                         showgrid: true,
-                        gridcolor: 'rgba(128, 128, 128, 0.2)'
+                        gridcolor: 'rgba(255, 255, 255, 0.2)',
+                        tickfont: { color: '#ffffff' }
                     },
                     width: 800,
                     height: 400,
                     margin: { l: 60, r: 30, t: 60, b: 50 },
-                    plot_bgcolor: 'white',
-                    paper_bgcolor: 'white',
+                    plot_bgcolor: 'black',
+                    paper_bgcolor: 'black',
                     font: {
                         family: 'Arial, sans-serif',
                         size: 11,
-                        color: '#333'
+                        color: '#ffffff'
                     }
                 };
 
