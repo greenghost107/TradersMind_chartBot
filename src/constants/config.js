@@ -66,9 +66,6 @@ module.exports = {
             BASE_URL: 'https://www.alphavantage.co/query',
             FUNCTION: 'TIME_SERIES_DAILY',
             OUTPUT_SIZE: 'compact'
-        },
-        CHART_JS: {
-            CDN_URL: 'https://cdn.jsdelivr.net/npm/chart.js@3.9.1'
         }
     },
 

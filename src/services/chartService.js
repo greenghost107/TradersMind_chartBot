@@ -344,89 +344,12 @@ class ChartService {
                     })
                     .catch(plotlyError => {
                         console.error('Plotly rendering error:', plotlyError);
-                        createFallbackChart();
+                        throw new Error('Failed to render candlestick chart: ' + plotlyError.message);
                     });
                 
             } catch (error) {
                 console.error('Error setting up Plotly chart:', error);
-                createFallbackChart();
-            }
-            
-            // Fallback chart using HTML5 Canvas
-            function createFallbackChart() {
-                console.log('Creating fallback line chart...');
-                
-                const chartDiv = document.getElementById('chart');
-                chartDiv.innerHTML = '<canvas id="fallback-chart" width="800" height="400"></canvas>';
-                
-                const canvas = document.getElementById('fallback-chart');
-                const ctx = canvas.getContext('2d');
-                
-                // Simple line chart as fallback
-                const closes = ${JSON.stringify(stockData.closes)};
-                const dates = ${JSON.stringify(stockData.dates)};
-                
-                // Canvas dimensions
-                const padding = 60;
-                const chartWidth = canvas.width - 2 * padding;
-                const chartHeight = canvas.height - 2 * padding;
-                
-                // Find price range
-                const minPrice = Math.min(...closes);
-                const maxPrice = Math.max(...closes);
-                const priceRange = maxPrice - minPrice;
-                
-                // Clear canvas and set background
-                ctx.fillStyle = 'white';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                
-                // Draw title
-                ctx.fillStyle = '${color}';
-                ctx.font = 'bold 16px Arial';
-                ctx.textAlign = 'center';
-                ctx.fillText('${title}', canvas.width / 2, 30);
-                
-                // Draw price line
-                ctx.strokeStyle = '${color}';
-                ctx.lineWidth = 2;
-                ctx.beginPath();
-                
-                closes.forEach((price, i) => {
-                    const x = padding + (i / (closes.length - 1)) * chartWidth;
-                    const y = padding + (1 - (price - minPrice) / priceRange) * chartHeight;
-                    
-                    if (i === 0) {
-                        ctx.moveTo(x, y);
-                    } else {
-                        ctx.lineTo(x, y);
-                    }
-                });
-                
-                ctx.stroke();
-                
-                // Draw axes
-                ctx.strokeStyle = '#666';
-                ctx.lineWidth = 1;
-                
-                // Y-axis
-                ctx.beginPath();
-                ctx.moveTo(padding, padding);
-                ctx.lineTo(padding, padding + chartHeight);
-                ctx.stroke();
-                
-                // X-axis
-                ctx.beginPath();
-                ctx.moveTo(padding, padding + chartHeight);
-                ctx.lineTo(padding + chartWidth, padding + chartHeight);
-                ctx.stroke();
-                
-                // Add "Fallback Chart" label
-                ctx.fillStyle = '#666';
-                ctx.font = '12px Arial';
-                ctx.textAlign = 'right';
-                ctx.fillText('Fallback Chart', canvas.width - 10, canvas.height - 10);
-                
-                console.log('Fallback chart created successfully');
+                throw new Error('Failed to setup candlestick chart: ' + error.message);
             }
             </script>
         </body>

@@ -162,8 +162,8 @@ When adding the bot to your server, ensure these permissions:
 - ✅ Send Messages
 - ✅ Create Public Threads
 - ✅ Send Messages in Threads
-- ✅ Attach Files
 - ✅ Embed Links
+- ✅ Attach Files
 - ✅ Read Message History
 - ✅ Use External Emojis
 

@@ -14,14 +14,82 @@ const InteractionHandler = require('./handlers/interactionHandler');
 const ErrorHandler = require('./handlers/errorHandler');
 const { logger } = require('./utils/logger');
 
+// Singleton pattern to prevent multiple bot instances
+let botInstance = null;
+const BOT_LOCK_FILE = '/tmp/tradersmind-bot.lock';
+const fs = require('fs');
+
 class TradersMindsBot {
     constructor() {
+        // Singleton check
+        if (botInstance) {
+            return botInstance;
+        }
+        
         this.environment = null;
         this.discordConfig = null;
         this.client = null;
         this.services = {};
         this.handlers = {};
         this.isRunning = false;
+        
+        // Set singleton instance
+        botInstance = this;
+    }
+    
+    /**
+     * Check if another bot instance is already running
+     */
+    checkForRunningInstance() {
+        try {
+            if (fs.existsSync(BOT_LOCK_FILE)) {
+                const lockData = fs.readFileSync(BOT_LOCK_FILE, 'utf8');
+                const { pid } = JSON.parse(lockData);
+                
+                // Check if the process is still running
+                try {
+                    process.kill(pid, 0); // Signal 0 checks if process exists without killing it
+                    console.log(`❌ Another bot instance is already running (PID ${pid})`);
+                    return true;
+                } catch (error) {
+                    // Process doesn't exist, remove stale lock file
+                    fs.unlinkSync(BOT_LOCK_FILE);
+                    return false;
+                }
+            }
+            return false;
+        } catch (error) {
+            return false;
+        }
+    }
+    
+    /**
+     * Create lock file to prevent multiple instances
+     */
+    createLockFile() {
+        try {
+            const lockData = {
+                pid: process.pid,
+                timestamp: Date.now(),
+                startedAt: new Date().toISOString()
+            };
+            fs.writeFileSync(BOT_LOCK_FILE, JSON.stringify(lockData, null, 2));
+        } catch (error) {
+            // Silently fail
+        }
+    }
+    
+    /**
+     * Remove lock file on shutdown
+     */
+    removeLockFile() {
+        try {
+            if (fs.existsSync(BOT_LOCK_FILE)) {
+                fs.unlinkSync(BOT_LOCK_FILE);
+            }
+        } catch (error) {
+            // Silently fail
+        }
     }
 
     /**
@@ -206,6 +274,15 @@ class TradersMindsBot {
      */
     async start() {
         try {
+            // Check for existing instances before starting
+            if (this.checkForRunningInstance()) {
+                console.log('🛑 Exiting to prevent duplicate bot instances');
+                process.exit(1);
+            }
+            
+            // Create lock file
+            this.createLockFile();
+            
             await this.initialize();
             await this.discordConfig.login();
             
@@ -216,6 +293,7 @@ class TradersMindsBot {
             
         } catch (error) {
             console.error('❌ Failed to start bot:', error.message);
+            this.removeLockFile(); // Clean up lock file on error
             process.exit(1);
         }
     }
@@ -277,10 +355,17 @@ class TradersMindsBot {
                 await this.discordConfig.shutdown();
             }
             
+            // Remove lock file
+            this.removeLockFile();
+            
+            // Clear singleton instance
+            botInstance = null;
+            
             logger.success('Shutdown completed successfully');
             
         } catch (error) {
             console.error('❌ Error during shutdown:', error.message);
+            this.removeLockFile(); // Ensure lock file is removed even on error
         }
     }
 

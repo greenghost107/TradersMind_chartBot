@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Candlestick Chart Testing - Chart.js vs Plotly.js</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; }
+        .test-section { 
+            background: white; 
+            margin: 20px 0; 
+            padding: 20px; 
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .chart-container { 
+            width: 840px; 
+            height: 440px; 
+            margin: 20px auto;
+            border: 1px solid #ddd;
+            background: white;
+        }
+        .status { padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background: #cce5ff; color: #004085; border: 1px solid #99ccff; }
+        h2 { color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px; }
+        pre { background: #f8f9fa; padding: 15px; border-radius: 4px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>🕯️ Candlestick Chart Testing: Chart.js vs Plotly.js</h1>
+    
+    <!-- Sample OHLC Data -->
+    <div class="test-section">
+        <h2>📊 Test Data Structure</h2>
+        <pre id="sampleData"></pre>
+    </div>
+
+    <!-- Chart.js Test -->
+    <div class="test-section">
+        <h2>🔴 Chart.js with Financial Plugin Test</h2>
+        <div id="chartjs-status" class="status info">Loading Chart.js dependencies...</div>
+        <div class="chart-container">
+            <canvas id="chartjs-chart" width="800" height="400"></canvas>
+        </div>
+        <div id="chartjs-details"></div>
+    </div>
+
+    <!-- Plotly.js Test -->
+    <div class="test-section">
+        <h2>🟢 Plotly.js Candlestick Test</h2>
+        <div id="plotly-status" class="status info">Loading Plotly.js...</div>
+        <div class="chart-container" id="plotly-chart"></div>
+        <div id="plotly-details"></div>
+    </div>
+
+    <!-- Results Summary -->
+    <div class="test-section">
+        <h2>📋 Test Results Summary</h2>
+        <div id="results-summary"></div>
+    </div>
+
+    <!-- Load Chart.js Dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.2.1"></script>
+
+    <!-- Load Plotly.js -->
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+
+    <script>
+        // Sample OHLC Data (30 days)
+        const sampleData = {
+            symbol: 'AAPL',
+            currentPrice: '185.25',
+            change: '2.15',
+            changePercent: '1.17',
+            dates: [
+                '2024-01-01', '2024-01-02', '2024-01-03', '2024-01-04', '2024-01-05',
+                '2024-01-08', '2024-01-09', '2024-01-10', '2024-01-11', '2024-01-12',
+                '2024-01-16', '2024-01-17', '2024-01-18', '2024-01-19', '2024-01-22',
+                '2024-01-23', '2024-01-24', '2024-01-25', '2024-01-26', '2024-01-29',
+                '2024-01-30', '2024-01-31', '2024-02-01', '2024-02-02', '2024-02-05',
+                '2024-02-06', '2024-02-07', '2024-02-08', '2024-02-09', '2024-02-12'
+            ],
+            opens: [
+                180.00, 181.50, 183.00, 182.50, 184.00,
+                185.50, 184.00, 186.00, 187.50, 186.00,
+                188.00, 189.50, 187.00, 190.00, 188.50,
+                191.00, 189.00, 192.50, 191.00, 193.00,
+                194.50, 192.00, 195.00, 193.50, 196.00,
+                194.00, 197.50, 195.50, 198.00, 196.50
+            ],
+            highs: [
+                182.50, 184.00, 185.50, 185.00, 186.50,
+                187.00, 186.50, 188.50, 189.00, 188.50,
+                190.50, 191.00, 189.50, 192.00, 191.00,
+                193.50, 191.50, 194.00, 193.50, 195.50,
+                196.00, 194.50, 197.50, 196.00, 198.50,
+                196.50, 199.00, 198.00, 200.50, 199.00
+            ],
+            lows: [
+                179.50, 180.00, 181.50, 181.00, 182.50,
+                183.00, 182.50, 184.50, 185.00, 184.50,
+                186.50, 187.00, 185.50, 188.00, 186.50,
+                189.00, 187.50, 190.50, 189.00, 191.00,
+                192.50, 190.00, 193.50, 192.00, 194.50,
+                192.50, 196.00, 194.00, 197.00, 195.00
+            ],
+            closes: [
+                181.50, 183.00, 182.50, 184.00, 185.50,
+                184.00, 186.00, 187.50, 186.00, 188.00,
+                189.50, 187.00, 190.00, 188.50, 191.00,
+                189.00, 192.50, 191.00, 193.00, 194.50,
+                192.00, 195.00, 193.50, 196.00, 194.00,
+                197.50, 195.50, 198.00, 196.50, 185.25
+            ],
+            volumes: [
+                1000000, 1200000, 950000, 1100000, 1300000,
+                1150000, 980000, 1250000, 1050000, 1180000,
+                1320000, 900000, 1400000, 1080000, 1220000,
+                950000, 1350000, 1020000, 1280000, 1160000,
+                990000, 1380000, 1070000, 1240000, 1040000,
+                1300000, 1120000, 1410000, 1090000, 1500000
+            ],
+            source: 'test_data'
+        };
+
+        // Display sample data
+        document.getElementById('sampleData').textContent = JSON.stringify(sampleData, null, 2);
+
+        // Test Results Tracker
+        const testResults = {
+            chartjs: { success: false, error: null, time: null },
+            plotly: { success: false, error: null, time: null }
+        };
+
+        // Chart.js Test
+        async function testChartJs() {
+            const startTime = performance.now();
+            
+            try {
+                document.getElementById('chartjs-status').textContent = 'Creating Chart.js candlestick chart...';
+                
+                // Transform data for Chart.js candlestick format
+                const candlestickData = sampleData.dates.map((date, index) => ({
+                    x: date,
+                    o: sampleData.opens[index],
+                    h: sampleData.highs[index],
+                    l: sampleData.lows[index],
+                    c: sampleData.closes[index]
+                }));
+
+                const ctx = document.getElementById('chartjs-chart').getContext('2d');
+                
+                // Check if Chart.js financial plugin is loaded
+                if (!Chart.controllers.candlestick) {
+                    throw new Error('Chart.js financial plugin not loaded properly');
+                }
+
+                const chart = new Chart(ctx, {
+                    type: 'candlestick',
+                    data: {
+                        datasets: [{
+                            label: `${sampleData.symbol} OHLC`,
+                            data: candlestickData,
+                            borderColor: {
+                                up: '#00ff88',
+                                down: '#ff4444',
+                                unchanged: '#999999'
+                            },
+                            backgroundColor: {
+                                up: 'rgba(0, 255, 136, 0.1)',
+                                down: 'rgba(255, 68, 68, 0.1)',
+                                unchanged: 'rgba(153, 153, 153, 0.1)'
+                            }
+                        }]
+                    },
+                    options: {
+                        responsive: false,
+                        scales: {
+                            x: {
+                                type: 'time',
+                                time: {
+                                    unit: 'day'
+                                }
+                            },
+                            y: {
+                                beginAtZero: false
+                            }
+                        }
+                    }
+                });
+
+                const endTime = performance.now();
+                testResults.chartjs = { 
+                    success: true, 
+                    error: null, 
+                    time: Math.round(endTime - startTime) 
+                };
+                
+                document.getElementById('chartjs-status').className = 'status success';
+                document.getElementById('chartjs-status').textContent = `✅ Chart.js test completed successfully in ${testResults.chartjs.time}ms`;
+                
+                document.getElementById('chartjs-details').innerHTML = `
+                    <h4>Chart.js Details:</h4>
+                    <ul>
+                        <li>Chart.js Version: ${Chart.version}</li>
+                        <li>Plugin Loaded: ${Chart.controllers.candlestick ? '✅ Yes' : '❌ No'}</li>
+                        <li>Data Points: ${candlestickData.length}</li>
+                        <li>Render Time: ${testResults.chartjs.time}ms</li>
+                    </ul>
+                `;
+
+            } catch (error) {
+                const endTime = performance.now();
+                testResults.chartjs = { 
+                    success: false, 
+                    error: error.message, 
+                    time: Math.round(endTime - startTime) 
+                };
+                
+                document.getElementById('chartjs-status').className = 'status error';
+                document.getElementById('chartjs-status').textContent = `❌ Chart.js test failed: ${error.message}`;
+                
+                document.getElementById('chartjs-details').innerHTML = `
+                    <h4>Chart.js Error Details:</h4>
+                    <ul>
+                        <li>Error: ${error.message}</li>
+                        <li>Chart.js Available: ${typeof Chart !== 'undefined' ? '✅ Yes' : '❌ No'}</li>
+                        <li>Financial Plugin: ${typeof Chart !== 'undefined' && Chart.controllers.candlestick ? '✅ Yes' : '❌ No'}</li>
+                        <li>Time to Error: ${testResults.chartjs.time}ms</li>
+                    </ul>
+                    <pre style="color: red; background: #ffe6e6;">${error.stack}</pre>
+                `;
+            }
+        }
+
+        // Plotly.js Test
+        async function testPlotly() {
+            const startTime = performance.now();
+            
+            try {
+                document.getElementById('plotly-status').textContent = 'Creating Plotly.js candlestick chart...';
+                
+                const trace = {
+                    x: sampleData.dates,
+                    close: sampleData.closes,
+                    decreasing: { line: { color: '#ff4444' } },
+                    high: sampleData.highs,
+                    increasing: { line: { color: '#00ff88' } },
+                    line: { color: 'rgba(31,119,180,1)' },
+                    low: sampleData.lows,
+                    open: sampleData.opens,
+                    type: 'candlestick',
+                    xaxis: 'x',
+                    yaxis: 'y',
+                    name: sampleData.symbol
+                };
+
+                const layout = {
+                    title: `${sampleData.symbol} - $${sampleData.currentPrice} (+${sampleData.changePercent}%)`,
+                    xaxis: {
+                        title: 'Date',
+                        rangeslider: { visible: false }
+                    },
+                    yaxis: {
+                        title: 'Price ($)',
+                        fixedrange: false
+                    },
+                    width: 800,
+                    height: 400,
+                    margin: { l: 50, r: 50, t: 50, b: 50 }
+                };
+
+                const config = {
+                    displayModeBar: true,
+                    displaylogo: false,
+                    modeBarButtonsToRemove: ['pan2d', 'lasso2d']
+                };
+
+                await Plotly.newPlot('plotly-chart', [trace], layout, config);
+
+                const endTime = performance.now();
+                testResults.plotly = { 
+                    success: true, 
+                    error: null, 
+                    time: Math.round(endTime - startTime) 
+                };
+                
+                document.getElementById('plotly-status').className = 'status success';
+                document.getElementById('plotly-status').textContent = `✅ Plotly.js test completed successfully in ${testResults.plotly.time}ms`;
+                
+                document.getElementById('plotly-details').innerHTML = `
+                    <h4>Plotly.js Details:</h4>
+                    <ul>
+                        <li>Plotly.js Version: ${Plotly.version}</li>
+                        <li>Chart Type: Candlestick</li>
+                        <li>Data Points: ${sampleData.dates.length}</li>
+                        <li>Render Time: ${testResults.plotly.time}ms</li>
+                        <li>Interactive Features: ✅ Zoom, Pan, Hover</li>
+                    </ul>
+                `;
+
+            } catch (error) {
+                const endTime = performance.now();
+                testResults.plotly = { 
+                    success: false, 
+                    error: error.message, 
+                    time: Math.round(endTime - startTime) 
+                };
+                
+                document.getElementById('plotly-status').className = 'status error';
+                document.getElementById('plotly-status').textContent = `❌ Plotly.js test failed: ${error.message}`;
+                
+                document.getElementById('plotly-details').innerHTML = `
+                    <h4>Plotly.js Error Details:</h4>
+                    <ul>
+                        <li>Error: ${error.message}</li>
+                        <li>Plotly Available: ${typeof Plotly !== 'undefined' ? '✅ Yes' : '❌ No'}</li>
+                        <li>Time to Error: ${testResults.plotly.time}ms</li>
+                    </ul>
+                    <pre style="color: red; background: #ffe6e6;">${error.stack}</pre>
+                `;
+            }
+        }
+
+        // Update Results Summary
+        function updateResultsSummary() {
+            const summary = document.getElementById('results-summary');
+            const winner = testResults.chartjs.success && testResults.plotly.success 
+                ? (testResults.chartjs.time < testResults.plotly.time ? 'Chart.js' : 'Plotly.js')
+                : testResults.chartjs.success ? 'Chart.js' : testResults.plotly.success ? 'Plotly.js' : 'Neither';
+
+            summary.innerHTML = `
+                <h3>🏆 Test Winner: ${winner}</h3>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr style="background: #f8f9fa;">
+                        <th style="border: 1px solid #ddd; padding: 12px; text-align: left;">Library</th>
+                        <th style="border: 1px solid #ddd; padding: 12px; text-align: left;">Status</th>
+                        <th style="border: 1px solid #ddd; padding: 12px; text-align: left;">Time (ms)</th>
+                        <th style="border: 1px solid #ddd; padding: 12px; text-align: left;">Notes</th>
+                    </tr>
+                    <tr>
+                        <td style="border: 1px solid #ddd; padding: 12px;">Chart.js + Financial Plugin</td>
+                        <td style="border: 1px solid #ddd; padding: 12px;">${testResults.chartjs.success ? '✅ Success' : '❌ Failed'}</td>
+                        <td style="border: 1px solid #ddd; padding: 12px;">${testResults.chartjs.time || 'N/A'}</td>
+                        <td style="border: 1px solid #ddd; padding: 12px;">${testResults.chartjs.error || 'Working correctly'}</td>
+                    </tr>
+                    <tr>
+                        <td style="border: 1px solid #ddd; padding: 12px;">Plotly.js</td>
+                        <td style="border: 1px solid #ddd; padding: 12px;">${testResults.plotly.success ? '✅ Success' : '❌ Failed'}</td>
+                        <td style="border: 1px solid #ddd; padding: 12px;">${testResults.plotly.time || 'N/A'}</td>
+                        <td style="border: 1px solid #ddd; padding: 12px;">${testResults.plotly.error || 'Working correctly'}</td>
+                    </tr>
+                </table>
+                
+                <h4>💡 Recommendations:</h4>
+                <ul>
+                    <li><strong>For Discord Bot:</strong> ${testResults.plotly.success ? 'Use Plotly.js - More reliable and feature-rich' : 'Consider Chart.js if working'}</li>
+                    <li><strong>Performance:</strong> ${winner} performed better (${Math.min(testResults.chartjs.time || Infinity, testResults.plotly.time || Infinity)}ms)</li>
+                    <li><strong>Features:</strong> Plotly.js offers better interactivity and financial chart support</li>
+                    <li><strong>Maintenance:</strong> Plotly.js has fewer dependency issues</li>
+                </ul>
+            `;
+        }
+
+        // Run tests when page loads
+        window.addEventListener('load', async () => {
+            console.log('Starting candlestick chart tests...');
+            
+            // Small delay to ensure libraries are loaded
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Run both tests
+            await Promise.all([
+                testChartJs(),
+                testPlotly()
+            ]);
+            
+            // Update summary
+            updateResultsSummary();
+            
+            console.log('All tests completed:', testResults);
+        });
+    </script>
+</body>
+</html>

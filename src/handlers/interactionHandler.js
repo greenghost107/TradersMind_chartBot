@@ -191,47 +191,39 @@ class InteractionHandler {
                 return;
             }
 
-            logger.debug('Attempting to defer ephemeral reply', {
-                user: interaction.user.username,
-                ticker,
-                interactionId: interaction.id,
-                interactionState: {
-                    replied: interaction.replied,
-                    deferred: interaction.deferred
-                }
-            });
+            // Check if interaction is too old (Discord interactions expire after 3 seconds)
+            const interactionAge = Date.now() - interaction.createdTimestamp;
+            if (interactionAge > 2500) { // 2.5 seconds safety margin
+                logger.warn('Interaction expired, ignoring', {
+                    ticker,
+                    user: interaction.user.username,
+                    ageMs: interactionAge
+                });
+                return;
+            }
+
 
             try {
                 await interaction.deferReply({ ephemeral: true });
                 replyDeferred = true;
-                logger.debug('Successfully deferred interaction reply', {
-                    ticker,
-                    user: interaction.user.username,
-                    interactionId: interaction.id
-                });
             } catch (deferError) {
-                logger.error('Failed to defer interaction reply', {
-                    ticker,
-                    user: interaction.user.username,
-                    interactionId: interaction.id,
-                    error: deferError.message,
-                    interactionState: {
-                        replied: interaction.replied,
-                        deferred: interaction.deferred
-                    }
-                });
+                // Check if the error is due to unknown interaction (expired)
+                if (deferError.message.includes('Unknown interaction')) {
+                    logger.warn('Interaction expired before defer, skipping', {
+                        ticker,
+                        user: interaction.user.username
+                    });
+                } else {
+                    logger.error('Failed to defer interaction reply', {
+                        ticker,
+                        user: interaction.user.username,
+                        error: deferError.message
+                    });
+                }
                 
                 // If defer failed, don't proceed with chart generation
                 return;
             }
-            
-            logger.debug('Successfully deferred reply, processing ephemeral chart request', {
-                user: interaction.user.username,
-                userId: interaction.user.id,
-                ticker,
-                channelId: interaction.channel.id,
-                replyDeferred: true
-            });
             
             // Fetch stock data
             const stockData = await this.stockService.fetchStockData(ticker);
@@ -247,11 +239,6 @@ class InteractionHandler {
             // Create embed
             const embed = this.chartService.createStockEmbed(stockData);
 
-            logger.debug('Sending chart as ephemeral response', {
-                user: interaction.user.username,
-                ticker,
-                replyDeferred
-            });
 
             // Send chart as ephemeral response (only visible to requesting user)
             const chartMessage = await interaction.editReply({
@@ -276,11 +263,9 @@ class InteractionHandler {
                 );
             }
             
-            logger.success('Chart sent as ephemeral response', { 
+            logger.debug('Chart sent successfully', { 
                 user: interaction.user.username,
-                ticker,
-                channelId: interaction.channel.id,
-                messageId: chartMessage.id
+                ticker
             });
             
         } catch (error) {

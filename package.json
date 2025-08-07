@@ -5,9 +5,7 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "start:old": "node bot.js",
     "dev": "nodemon src/index.js",
-    "dev:old": "nodemon bot.js",
     "test": "playwright test"
   },
   "keywords": [
