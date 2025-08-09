@@ -70,7 +70,7 @@ class ChartService {
     /**
      * Generate stock chart using Puppeteer and Plotly.js
      */
-    async generateChart(stockData, messageId = null, channelId = null, userId = null, threadId = null) {
+    async generateChart(stockData, messageId = null, channelId = null, userId = null, threadId = null, username = null) {
         // Declare cacheKey at function scope so it's available in catch blocks
         let cacheKey;
         
@@ -82,7 +82,14 @@ class ChartService {
             cacheKey = this.getChartCacheKey(stockData.symbol);
             const cachedChart = this.getFromCache(cacheKey);
             if (cachedChart) {
-                logger.debug('Using cached chart', { ticker: stockData.symbol });
+                logger.debug('Chart retrieved from cache', { 
+                    ticker: stockData.symbol, 
+                    userId, 
+                    username,
+                    channelId, 
+                    source: 'cache', 
+                    cacheKey 
+                });
                 
                 // Track message with cache key if tracking is enabled
                 if (this.messageTrackingService && messageId) {
@@ -101,6 +108,9 @@ class ChartService {
         } catch (validationError) {
             logger.error('Stock data validation failed', {
                 ticker: stockData.symbol,
+                userId,
+                username,
+                channelId,
                 error: validationError.message,
                 dataKeys: Object.keys(stockData)
             });
@@ -109,7 +119,13 @@ class ChartService {
         
         let browser;
         try {
-            logger.logWithPrefix('📊', `Generating candlestick chart for ${stockData.symbol} (${stockData.source || 'unknown'})`);
+            logger.logWithPrefix('📊', `Generating candlestick chart for ${stockData.symbol}`, {
+                userId,
+                username,
+                channelId, 
+                source: 'generated',
+                dataSource: stockData.source || 'unknown'
+            });
             
             browser = await puppeteer.launch({ 
                 headless: true,
@@ -199,6 +215,10 @@ class ChartService {
             
             logger.success('Chart generated and cached', { 
                 ticker: stockData.symbol,
+                userId,
+                username,
+                channelId,
+                source: 'generated',
                 cacheKey 
             });
             
@@ -219,6 +239,9 @@ class ChartService {
 
             logger.error('Chart generation failed', {
                 ticker: stockData.symbol,
+                userId,
+                username,
+                channelId,
                 error: error.message,
                 errorType: error.constructor.name,
                 step: error.message.includes('Waiting failed') ? 'chart_rendering' : 'browser_setup',

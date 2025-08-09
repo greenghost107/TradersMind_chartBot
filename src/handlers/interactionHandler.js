@@ -233,7 +233,9 @@ class InteractionHandler {
                 stockData, 
                 null, // messageId will be set after sending
                 interaction.channel.id, // use channel instead of thread
-                interaction.user.id
+                interaction.user.id,
+                null, // threadId
+                interaction.user.displayName || interaction.user.globalName || interaction.user.username
             );
             
             // Create embed
